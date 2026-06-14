@@ -154,16 +154,18 @@ yarn android
 
 ### Environment
 
-Edit `src/config/environments.js` and replace the `base_api_url` values with your backend URLs:
+The app reads the backend URL from `src/config/environments.js` → `local.base_api_url`. It defaults to `http://localhost:3000/`.
 
+- **Emulator / web:** `localhost:3000` works as-is (Android emulator: use `http://10.0.2.2:3000/`).
+- **Physical phone (Expo Go):** `localhost` won't reach your laptop. Set `base_api_url` to your laptop's LAN IP — find it with `ipconfig` (look under **Wireless LAN adapter Wi-Fi** → **IPv4 Address**), e.g.:
 ```js
-local: {
-  base_api_url: 'https://your-local-api.ngrok.io/',
-},
-production: {
-  base_api_url: 'https://api.yourdomain.com/',
-},
+  base_api_url: 'http://192.168.1.42:3000/',  // your IP, keep :3000 and trailing slash
 ```
+Phone and laptop must be on the same network. If it won't connect, use a laptop **Mobile Hotspot** (laptop IP usually `192.168.137.1`), set the network to **Private**, and allow inbound TCP 3000 in the firewall.
+
+**Don't commit your own IP** — leave `localhost` as the committed default and set your IP locally only.
+
+After changing it, reload the app (`r` in Metro, or shake → Reload).
 
 ### Assets
 
