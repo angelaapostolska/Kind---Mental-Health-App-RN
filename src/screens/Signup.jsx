@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Keyboard, TouchableWithoutFeedback, ScrollView } from 'react-native';
+import { useRegisterMutation } from '@/api/authApi';
 import { ScreenTitle, ThemeInput, ThemePasswordInput, ThemeButton } from '@/components';
 import NavigationScreens from '@/config/NavigationScreens';
 import { theme } from '@/constants/theme';
+import { setSignedIn } from '@/store/commonSlices/userSlice';
+import { useAppDispatch } from '@/store/store';
 import { showErrorToast } from '@/utils';
 
 const Signup = ({ navigation }) => {
+  const dispatch = useAppDispatch();
+  const [register, { isLoading }] = useRegisterMutation();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,7 +24,14 @@ const Signup = ({ navigation }) => {
       showErrorToast('Password must be at least 8 characters');
       return;
     }
-    showErrorToast('Signup not implemented yet');
+    try {
+      await register({ name, email, password }).unwrap();
+      dispatch(setSignedIn(true));
+    } catch (err) {
+      let errorMsg = 'Registration failed. Please try again.';
+      if (err?.data?.message) errorMsg = err.data.message;
+      showErrorToast(errorMsg);
+    }
   };
 
   return (
@@ -34,15 +46,35 @@ const Signup = ({ navigation }) => {
 
             <View style={styles.formContainer}>
               <View style={styles.inputContainer}>
-                <ThemeInput placeholder="Full Name" onChangeText={setName} value={name} autoCapitalize="words" />
-                <ThemeInput placeholder="Email" onChangeText={setEmail} value={email} autoCapitalize="none" keyboardType="email-address" />
-                <ThemePasswordInput placeholder="Password" onChangeText={setPassword} value={password} />
+                <ThemeInput
+                  placeholder="Full Name"
+                  onChangeText={setName}
+                  value={name}
+                  autoCapitalize="words"
+                />
+                <ThemeInput
+                  placeholder="Email"
+                  onChangeText={setEmail}
+                  value={email}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+                <ThemePasswordInput
+                  placeholder="Password"
+                  onChangeText={setPassword}
+                  value={password}
+                />
               </View>
 
-              <ThemeButton title="Sign Up" onPress={handleSignupPress} />
+              <ThemeButton title="Sign Up" onPress={handleSignupPress} loading={isLoading} />
 
-              <TouchableOpacity onPress={() => navigation.navigate(NavigationScreens.Login)} style={styles.loginContainer}>
-                <Text style={styles.loginText}>Already have an account? <Text style={styles.loginLink}>Log In</Text></Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate(NavigationScreens.Login)}
+                style={styles.loginContainer}
+              >
+                <Text style={styles.loginText}>
+                  Already have an account? <Text style={styles.loginLink}>Log In</Text>
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
