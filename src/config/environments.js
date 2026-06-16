@@ -3,7 +3,7 @@ import Constants from 'expo-constants';
 const ENVIRONMENTS = {
   local: {
     environment: 'local',
-    base_api_url: 'http://localhost:3000/',
+    base_api_url: Constants.expoConfig?.extra?.apiUrl ?? 'http://localhost:3000/',
   },
   development: {
     environment: 'development',
