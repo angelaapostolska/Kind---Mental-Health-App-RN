@@ -1,13 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { theme } from '@/constants/theme';
 import { useAppDispatch } from '@/store/store';
 import { setHideOnboarding, setUserName, setSelectedAnimal } from '@/store/commonSlices/appSlice';
-import { setSignedIn } from '@/store/commonSlices/userSlice';
-
-const { width } = Dimensions.get('window');
 
 const ANIMALS = [
   { id: 'cat', name: 'Mochi', emoji: '🐱', desc: 'Calm & curious' },
@@ -35,12 +32,10 @@ const OnboardingNavigator = () => {
     dispatch(setUserName(trimmedName));
     dispatch(setSelectedAnimal(selectedAnimal));
     dispatch(setHideOnboarding(true));
-    dispatch(setSignedIn(true)); // skip auth for onboarding flow
   };
 
   return (
     <View style={styles.container}>
-      {/* Progress dots */}
       <View style={styles.dots}>
         {[0, 1, 2].map((i) => (
           <View key={i} style={[styles.dot, i === step && styles.dotActive]} />
@@ -51,7 +46,9 @@ const OnboardingNavigator = () => {
         <ScrollView contentContainerStyle={styles.stepContent}>
           <Text style={styles.bigEmoji}>🧠</Text>
           <Text style={styles.stepTitle}>Welcome to Kind</Text>
-          <Text style={styles.stepSub}>Your personal wellness companion. Track moods, build habits, and find your calm.</Text>
+          <Text style={styles.stepSub}>
+            Your personal wellness companion. Track moods, build habits, and find your calm.
+          </Text>
 
           <View style={styles.featureList}>
             {FEATURES.map((f) => (
@@ -127,46 +124,97 @@ const OnboardingNavigator = () => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.surface.two, paddingHorizontal: theme.spacing.lg, paddingTop: 60 },
+  container: {
+    flex: 1,
+    backgroundColor: theme.colors.surface.two,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: 60,
+  },
   dots: { flexDirection: 'row', gap: 8, justifyContent: 'center', marginBottom: 32 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.surface.three },
   dotActive: { width: 24, backgroundColor: theme.colors.primary },
   stepContent: { flex: 1, alignItems: 'center' },
   bigEmoji: { fontSize: 64, marginBottom: theme.spacing.md },
   stepTitle: { fontSize: 26, fontWeight: '800', color: theme.colors.text.primary, textAlign: 'center' },
-  stepSub: { fontSize: 14, color: theme.colors.text.secondary, textAlign: 'center', lineHeight: 22, marginTop: 8, marginBottom: 28, paddingHorizontal: 16 },
+  stepSub: {
+    fontSize: 14,
+    color: theme.colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginTop: 8,
+    marginBottom: 28,
+    paddingHorizontal: 16,
+  },
   featureList: { width: '100%', gap: 10, marginBottom: 32 },
   featureRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    backgroundColor: theme.colors.surface.one, borderRadius: 16, padding: theme.spacing.md,
-    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: theme.colors.surface.one,
+    borderRadius: 16,
+    padding: theme.spacing.md,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  featureIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.colors.surface.brandPrimary, alignItems: 'center', justifyContent: 'center' },
+  featureIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: theme.colors.surface.brandPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   featureLabel: { fontSize: 14, fontWeight: '600', color: theme.colors.text.primary },
   nextBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: theme.colors.primary, borderRadius: 20, paddingVertical: 16, width: '100%',
-    shadowColor: theme.colors.primary, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
-    marginTop: 'auto', marginBottom: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 20,
+    paddingVertical: 16,
+    width: '100%',
+    shadowColor: theme.colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+    marginTop: 'auto',
+    marginBottom: 24,
   },
   nextBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
   animalRow: { flexDirection: 'row', gap: 10, marginBottom: 24, width: '100%' },
   animalCard: {
-    flex: 1, alignItems: 'center', padding: theme.spacing.md, borderRadius: 20,
+    flex: 1,
+    alignItems: 'center',
+    padding: theme.spacing.md,
+    borderRadius: 20,
     backgroundColor: theme.colors.surface.one,
-    shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
   animalCardActive: {
-    borderWidth: 2, borderColor: theme.colors.primary,
+    borderWidth: 2,
+    borderColor: theme.colors.primary,
     backgroundColor: theme.colors.surface.brandPrimary,
   },
   animalEmoji: { fontSize: 40, marginBottom: 6 },
   animalName: { fontSize: 14, fontWeight: '700', color: theme.colors.text.primary },
   animalDesc: { fontSize: 10, color: theme.colors.text.secondary, textAlign: 'center' },
   nameInput: {
-    width: '100%', backgroundColor: theme.colors.surface.one, borderRadius: 16,
-    padding: theme.spacing.lg, fontSize: 16, fontWeight: '600', color: theme.colors.text.primary,
-    textAlign: 'center', borderWidth: 2, borderColor: theme.colors.border.one,
+    width: '100%',
+    backgroundColor: theme.colors.surface.one,
+    borderRadius: 16,
+    padding: theme.spacing.lg,
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.text.primary,
+    textAlign: 'center',
+    borderWidth: 2,
+    borderColor: theme.colors.border.one,
     marginBottom: 24,
   },
 });

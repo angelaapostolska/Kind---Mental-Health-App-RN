@@ -33,6 +33,14 @@ export const authApi = createApi({
         method: 'POST',
         body: { name, email, password },
       }),
+      async onQueryStarted(arg, { queryFulfilled }) {
+        try {
+          const { data } = await queryFulfilled;
+          await SecureStore.setItemAsync('access_token', data.token);
+        } catch (err) {
+          console.warn('Register failed', err);
+        }
+      },
     }),
   }),
 });
