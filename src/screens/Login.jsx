@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Keyboard, TouchableWithoutFeedback, ScrollView } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
 import { useLoginMutation } from '@/api/authApi';
 import { ScreenTitle, ThemeInput, ThemePasswordInput, ThemeButton } from '@/components';
 import NavigationScreens from '@/config/NavigationScreens';
@@ -16,16 +15,16 @@ const Login = ({ navigation }) => {
   const [password, setPassword] = useState('');
 
   const handleLoginPress = async () => {
+    if (!email || !password) {
+      showErrorToast('Please fill in all fields');
+      return;
+    }
     try {
-      const response = await login({ email, password }).unwrap();
-      await SecureStore.setItemAsync('access_token', response.token);
-      await SecureStore.setItemAsync('refresh_token', response.token);
+      await login({ email, password }).unwrap();
       dispatch(setSignedIn(true));
     } catch (err) {
-      let errorMsg = 'Login failed';
-      if (typeof err === 'object' && err !== null && 'data' in err && typeof err.data?.error_description === 'string') {
-        errorMsg = err.data.error_description;
-      }
+      let errorMsg = 'Login failed. Please check your credentials.';
+      if (err?.data?.message) errorMsg = err.data.message;
       showErrorToast(errorMsg);
     }
   };
@@ -36,7 +35,6 @@ const Login = ({ navigation }) => {
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.container}>
             <View style={styles.logoContent}>
-              {/* Logo placeholder — replace with <Image source={images.loginLogo} /> once assets added */}
               <View style={styles.logoPlaceholder} />
               <ScreenTitle title="Welcome Back" containerStyle={styles.title} />
               <Text style={styles.subtitle}>Your mental wellness companion</Text>
@@ -51,7 +49,11 @@ const Login = ({ navigation }) => {
                   autoCapitalize="none"
                   keyboardType="email-address"
                 />
-                <ThemePasswordInput placeholder="Password" onChangeText={setPassword} value={password} />
+                <ThemePasswordInput
+                  placeholder="Password"
+                  onChangeText={setPassword}
+                  value={password}
+                />
                 <TouchableOpacity activeOpacity={0.6} onPress={() => {}}>
                   <Text style={styles.forgotPass}>Forgot Password?</Text>
                 </TouchableOpacity>
@@ -59,8 +61,13 @@ const Login = ({ navigation }) => {
 
               <ThemeButton title="Log In" onPress={handleLoginPress} loading={isLoading} />
 
-              <TouchableOpacity onPress={() => navigation.navigate(NavigationScreens.Signup)} style={styles.signupContainer}>
-                <Text style={styles.signupText}>Don't have an account? <Text style={styles.signupLink}>Sign Up</Text></Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate(NavigationScreens.Signup)}
+                style={styles.signupContainer}
+              >
+                <Text style={styles.signupText}>
+                  Don't have an account? <Text style={styles.signupLink}>Sign Up</Text>
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
