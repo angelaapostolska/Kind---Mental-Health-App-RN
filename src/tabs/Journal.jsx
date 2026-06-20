@@ -4,6 +4,7 @@ import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { theme } from '@/constants/theme';
 import { MOOD_LEVELS, moodColor, moodLabel } from '@/utils';
+import { useCreateJournalEntryMutation } from '@/api/api';
 
 const ALL_PROMPTS = [
   'What made you smile today?',
@@ -24,17 +25,47 @@ const Journal = () => {
   const [mood, setMood] = useState(3);
   const [activePrompt, setActivePrompt] = useState(undefined);
   const [todaysPrompts] = useState(() => [...ALL_PROMPTS].sort(() => 0.5 - Math.random()).slice(0, 3));
+  const [createJournalEntry] = useCreateJournalEntryMutation();
 
-  const startWith = (p) => { setActivePrompt(p); setText(''); setMood(3); setOpen(true); };
+  const startWith = (p) => {
+    setActivePrompt(p);
+    setText('');
+    setMood(3);
+    setOpen(true);
+  };
 
-  const save = () => {
+  const save = async () => {
+    // CHANGED: now async
     if (!text.trim()) return;
-    setEntries([{
-      id: Date.now(),
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-      text, mood, prompt: activePrompt,
-    }, ...entries]);
-    setOpen(false); setText(''); setActivePrompt(undefined);
+    try {
+      // ADDED
+      const today = new Date().toISOString().split('T')[0]; // ADDED: "YYYY-MM-DD"
+      const result = await createJournalEntry({
+        // ADDED: fire the save to BE
+        createdAt: today,
+        content: text, // the textarea content (required by BE)
+        title: activePrompt || '', // reuse the prompt as title for now
+        type: 'BLANK', // EntryType enum
+      }).unwrap(); // ADDED
+      console.log('Journal saved to DB!', result); // ADDED: shows in Metro
+    } catch (e) {
+      // ADDED
+      console.log('Journal save failed:', e); // ADDED
+    }
+    setEntries([
+      {
+        // (kept) still update local UI
+        id: Date.now(),
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        text,
+        mood,
+        prompt: activePrompt,
+      },
+      ...entries,
+    ]);
+    setOpen(false);
+    setText('');
+    setActivePrompt(undefined);
   };
 
   return (
