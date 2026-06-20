@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { theme } from '@/constants/theme';
 import { MOOD_LEVELS, FEELINGS, FACTORS, moodColor, moodLabel, moodEmoji } from '@/utils';
+import { useCreateMoodEntryMutation } from '@/api/api';
 
 const MOCK_MOODS = {
   '2026-05-01': 1, '2026-05-02': 2, '2026-05-03': 3, '2026-05-04': 1,
@@ -17,11 +18,36 @@ const Mood = () => {
   const [factor, setFactor] = useState(null);
   const [done, setDone] = useState(false);
   const [month, setMonth] = useState(new Date(2026, 4, 1));
+  const [createMoodEntry] = useCreateMoodEntryMutation();
 
-  const reset = () => { setStep(1); setMood(null); setFeeling(null); setFactor(null); setDone(false); };
+  const reset = () => {
+    setStep(1);
+    setMood(null);
+    setFeeling(null);
+    setFactor(null);
+    setDone(false);
+  };
 
-  const next = () => {
-    if (step === 3) { setDone(true); return; }
+  const next = async () => {
+    // CHANGED: now async
+    if (step === 3) {
+      try {
+        // ADDED
+        const today = new Date().toISOString().split('T')[0]; // ADDED: "YYYY-MM-DD"
+        const result = await createMoodEntry({
+          // ADDED: fire the save
+          date: today,
+          moodValue: mood, // mood is 1-5 here; BE accepts 1-10
+          note: `${feeling} · ${factor}`, // stash the picks in the note for now
+        }).unwrap(); // ADDED: unwrap so errors throw
+        console.log('Saved to DB!', result); // ADDED: shows in Metro terminal
+      } catch (e) {
+        // ADDED
+        console.log('Save failed:', e); // ADDED: shows the error if it fails
+      }
+      setDone(true);
+      return;
+    }
     setStep(step + 1);
   };
 
