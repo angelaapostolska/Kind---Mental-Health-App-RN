@@ -1,70 +1,142 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal } from 'react-native';
+import React, { useState, useMemo, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator, Alert, Animated } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { theme } from '@/constants/theme';
-import { MOOD_LEVELS, moodColor, moodLabel } from '@/utils';
-import { useCreateJournalEntryMutation } from '@/api/api';
+import { MOOD_LEVELS, moodColor, moodLabel, isoDate, showSuccessToast, showErrorToast } from '@/utils';
+import { useCreateJournalEntryMutation, useCreateMoodEntryMutation, useDeleteJournalEntryMutation, useGetJournalPromptsByTypeQuery, useGetJournalEntriesQuery } from '@/api/api';
+import { useAppSelector } from '@/store/store';
 
-const ALL_PROMPTS = [
-  'What made you smile today?',
-  'What are you grateful for right now?',
-  'Describe a challenge you overcame recently.',
-  'What would you tell your younger self?',
-  "What's one thing you'd like to improve this week?",
-  'When did you feel most at peace today?',
-];
+// moodValue is stored as 1-5, matching the frontend mood level directly
+const moodValueToLevel = (v) => v || 3;
+
+// Parse a "YYYY-MM-DD" string without timezone shift
+const formatEntryDate = (dateStr) => {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const JournalEntryCard = ({ entry, onPress, onRequestDelete }) => {
+  const swipeRef = useRef(null);
+
+  const renderRightActions = (_, dragX) => {
+    const scale = dragX.interpolate({ inputRange: [-80, 0], outputRange: [1, 0.6], extrapolate: 'clamp' });
+    return (
+      <TouchableOpacity
+        style={styles.swipeDeleteAction}
+        activeOpacity={0.8}
+        onPress={() => { swipeRef.current?.close(); onRequestDelete(entry); }}
+      >
+        <Animated.View style={{ transform: [{ scale }], alignItems: 'center' }}>
+          <MaterialIcons name="delete-outline" size={22} color="#fff" />
+          <Text style={styles.swipeDeleteText}>Delete</Text>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
+      <TouchableOpacity style={styles.entryCard} onPress={onPress} activeOpacity={0.75}>
+        <View style={styles.entryHeader}>
+          <Text style={styles.entryDate}>{formatEntryDate(entry.createdAt)}</Text>
+          {entry.moodEntry && <View style={[styles.entryMoodDot, { backgroundColor: moodColor(moodValueToLevel(entry.moodEntry.moodValue)) }]} />}
+        </View>
+        {entry.journalPrompt?.promptText && <Text style={styles.entryPrompt}>"{entry.journalPrompt.promptText}"</Text>}
+        <Text style={styles.entryText} numberOfLines={3}>{entry.content}</Text>
+      </TouchableOpacity>
+    </Swipeable>
+  );
+};
 
 const Journal = () => {
-  const [entries, setEntries] = useState([
-    { id: 1, date: 'May 6, 2026', text: 'Had a great meditation session today. Feeling centered and grateful for the little things.', mood: 1, prompt: 'What are you grateful for right now?' },
-    { id: 2, date: 'May 5, 2026', text: 'Work was stressful but a walk in the park helped me decompress.', mood: 3 },
-  ]);
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
-  const [mood, setMood] = useState(3);
+  const [mood, setMood] = useState(null);
   const [activePrompt, setActivePrompt] = useState(undefined);
-  const [todaysPrompts] = useState(() => [...ALL_PROMPTS].sort(() => 0.5 - Math.random()).slice(0, 3));
+  const [selectedEntry, setSelectedEntry] = useState(null);
+
+  const userId = useAppSelector((state) => state.userState.userId);
   const [createJournalEntry] = useCreateJournalEntryMutation();
+  const [createMoodEntry] = useCreateMoodEntryMutation();
+  const [deleteJournalEntry] = useDeleteJournalEntryMutation();
+  const { data: journalEntries = [], isLoading: entriesLoading, isError: entriesError } = useGetJournalEntriesQuery(
+    userId,
+    { skip: !userId, refetchOnMountOrArgChange: true },
+  );
+
+  // Load GENERAL prompts from backend so we have real IDs to send
+  const { data: backendPrompts = [] } = useGetJournalPromptsByTypeQuery('GENERAL');
+
+  // Pick 3 random prompts once when the data loads (stable until next load)
+  const todaysPrompts = useMemo(
+    () => [...backendPrompts].sort(() => 0.5 - Math.random()).slice(0, 3),
+    [backendPrompts.length],
+  );
 
   const startWith = (p) => {
     setActivePrompt(p);
     setText('');
-    setMood(3);
+    setMood(null);
     setOpen(true);
   };
 
-  const save = async () => {
-    // CHANGED: now async
-    if (!text.trim()) return;
-    try {
-      // ADDED
-      const today = new Date().toISOString().split('T')[0]; // ADDED: "YYYY-MM-DD"
-      const result = await createJournalEntry({
-        // ADDED: fire the save to BE
-        createdAt: today,
-        content: text, // the textarea content (required by BE)
-        title: activePrompt || '', // reuse the prompt as title for now
-        type: 'BLANK', // EntryType enum
-      }).unwrap(); // ADDED
-      console.log('Journal saved to DB!', result); // ADDED: shows in Metro
-    } catch (e) {
-      // ADDED
-      console.log('Journal save failed:', e); // ADDED
-    }
-    setEntries([
+  const confirmDelete = (entry) => {
+    Alert.alert('Delete entry', 'This entry will be permanently deleted.', [
+      { text: 'Cancel', style: 'cancel' },
       {
-        // (kept) still update local UI
-        id: Date.now(),
-        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        text,
-        mood,
-        prompt: activePrompt,
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await deleteJournalEntry(entry.id).unwrap();
+            if (selectedEntry?.id === entry.id) setSelectedEntry(null);
+            showSuccessToast('Entry deleted', 'Your journal entry has been removed.');
+          } catch {
+            showErrorToast('Could not delete entry. Please try again.');
+          }
+        },
       },
-      ...entries,
     ]);
+  };
+
+  const save = async () => {
+    if (!text.trim() || !userId) return;
+    try {
+      const today = isoDate(new Date());
+
+      let moodEntryId = null;
+      if (mood !== null) {
+        const moodResult = await createMoodEntry({
+          date: today,
+          moodValue: mood,
+          note: '',
+          user: { id: userId },
+          selectedEmotions: [],
+          selectedFactors: [],
+        }).unwrap();
+        moodEntryId = moodResult.id;
+      }
+
+      const isPromptBased = !!activePrompt;
+      await createJournalEntry({
+        createdAt: today,
+        content: text,
+        title: isPromptBased ? activePrompt.promptText : 'Free write',
+        type: isPromptBased ? 'PROMPT_BASED' : 'BLANK',
+        user: { id: userId },
+        ...(moodEntryId !== null && { moodEntry: { id: moodEntryId } }),
+        ...(isPromptBased && { journalPrompt: { id: activePrompt.id } }),
+      }).unwrap();
+
+      showSuccessToast('Entry saved', 'Your journal entry has been saved.');
+    } catch (e) {
+      showErrorToast('Could not save your entry. Please try again.');
+      return;
+    }
     setOpen(false);
     setText('');
+    setMood(null);
     setActivePrompt(undefined);
   };
 
@@ -78,10 +150,10 @@ const Journal = () => {
         <Text style={styles.sectionTitle}>Today's Prompts</Text>
       </View>
 
-      {todaysPrompts.map((p, i) => (
-        <TouchableOpacity key={i} style={styles.promptCard} onPress={() => startWith(p)} activeOpacity={0.8}>
+      {todaysPrompts.map((p) => (
+        <TouchableOpacity key={p.id} style={styles.promptCard} onPress={() => startWith(p)} activeOpacity={0.8}>
           <MaterialCommunityIcons name="lightbulb-on-outline" size={14} color={theme.colors.primary} style={{ marginTop: 2 }} />
-          <Text style={styles.promptText}>{p}</Text>
+          <Text style={styles.promptText}>{p.promptText}</Text>
         </TouchableOpacity>
       ))}
 
@@ -92,15 +164,18 @@ const Journal = () => {
 
       {/* Past Entries */}
       <Text style={styles.entriesTitle}>Past Entries</Text>
-      {entries.map((e) => (
-        <View key={e.id} style={styles.entryCard}>
-          <View style={styles.entryHeader}>
-            <Text style={styles.entryDate}>{e.date}</Text>
-            <View style={[styles.entryMoodDot, { backgroundColor: moodColor(e.mood) }]} />
-          </View>
-          {e.prompt && <Text style={styles.entryPrompt}>"{e.prompt}"</Text>}
-          <Text style={styles.entryText} numberOfLines={3}>{e.text}</Text>
-        </View>
+      {entriesLoading && <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 16 }} />}
+      {entriesError && <Text style={styles.emptyText}>Could not load entries. Please try again.</Text>}
+      {!entriesLoading && !entriesError && journalEntries.length === 0 && (
+        <Text style={styles.emptyText}>No entries yet. Start writing above!</Text>
+      )}
+      {journalEntries.map((e) => (
+        <JournalEntryCard
+          key={e.id}
+          entry={e}
+          onPress={() => setSelectedEntry(e)}
+          onRequestDelete={confirmDelete}
+        />
       ))}
 
       {/* Composer Modal */}
@@ -113,7 +188,7 @@ const Journal = () => {
             {activePrompt && (
               <View style={styles.promptBanner}>
                 <MaterialCommunityIcons name="lightbulb-on-outline" size={14} color={theme.colors.primary} style={{ marginTop: 2 }} />
-                <Text style={styles.promptBannerText}>{activePrompt}</Text>
+                <Text style={styles.promptBannerText}>{activePrompt.promptText}</Text>
               </View>
             )}
 
@@ -127,11 +202,11 @@ const Journal = () => {
               textAlignVertical="top"
             />
 
-            <Text style={styles.moodPickerLabel}>Mood</Text>
+            <Text style={styles.moodPickerLabel}>Mood <Text style={styles.moodPickerOptional}>(optional)</Text></Text>
             <View style={styles.moodPickerRow}>
               {MOOD_LEVELS.map((m) => (
-                <TouchableOpacity key={m.level} onPress={() => setMood(m.level)} style={styles.moodPickerBtn}>
-                  <View style={[styles.moodPickerCircle, { backgroundColor: m.color }, mood === m.level && styles.moodPickerActive]}>
+                <TouchableOpacity key={m.level} onPress={() => setMood(mood === m.level ? null : m.level)} style={styles.moodPickerBtn}>
+                  <View style={[styles.moodPickerCircle, { backgroundColor: m.color, opacity: mood !== null && mood !== m.level ? 0.35 : 1 }, mood === m.level && styles.moodPickerActive]}>
                     <Text style={{ fontSize: 18 }}>{m.emoji}</Text>
                   </View>
                   <Text style={styles.moodPickerLabel2}>{m.label.split(' ').pop()}</Text>
@@ -147,6 +222,53 @@ const Journal = () => {
                 <Text style={styles.saveText}>Save entry</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Detail Modal */}
+      <Modal visible={!!selectedEntry} animationType="slide" transparent onRequestClose={() => setSelectedEntry(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.detailSheet}>
+            <View style={styles.modalHandle} />
+
+            <View style={styles.detailHeader}>
+              <Text style={styles.detailDate}>{formatEntryDate(selectedEntry?.createdAt)}</Text>
+              <TouchableOpacity onPress={() => setSelectedEntry(null)} style={styles.closeBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <MaterialIcons name="close" size={20} color={theme.colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+
+            {selectedEntry?.moodEntry && (() => {
+              const lvl = moodValueToLevel(selectedEntry.moodEntry.moodValue);
+              const meta = MOOD_LEVELS.find((m) => m.level === lvl);
+              return (
+                <View style={styles.detailSection}>
+                  <Text style={styles.detailLabel}>You felt</Text>
+                  <View style={[styles.moodBadge, { backgroundColor: meta.color + '28' }]}>
+                    <Text style={{ fontSize: 15 }}>{meta.emoji}</Text>
+                    <Text style={[styles.moodBadgeText, { color: meta.color }]}>{meta.label}</Text>
+                  </View>
+                </View>
+              );
+            })()}
+
+            {selectedEntry?.journalPrompt?.promptText && (
+              <View style={styles.detailSection}>
+                <Text style={styles.detailLabel}>You answered this</Text>
+                <Text style={styles.detailPromptValue}>{selectedEntry.journalPrompt.promptText}</Text>
+              </View>
+            )}
+
+            <Text style={styles.detailLabel}>You wrote</Text>
+            <ScrollView style={styles.detailScroll} showsVerticalScrollIndicator={false}>
+              <Text style={styles.detailContent}>{selectedEntry?.content}</Text>
+            </ScrollView>
+
+            <TouchableOpacity style={styles.deleteBtn} onPress={() => confirmDelete(selectedEntry)} activeOpacity={0.8}>
+              <MaterialIcons name="delete-outline" size={18} color="#ef4444" />
+              <Text style={styles.deleteBtnText}>Delete entry</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -174,6 +296,7 @@ const styles = StyleSheet.create({
   },
   freewriteText: { fontSize: theme.typography.fontSize.paragraph.sm, fontWeight: '700', color: '#fff' },
   entriesTitle: { fontSize: theme.typography.fontSize.paragraph.md, fontWeight: '700', color: theme.colors.text.primary, marginBottom: theme.spacing.sm },
+  emptyText: { fontSize: theme.typography.fontSize.paragraph.sm, color: theme.colors.text.secondary, textAlign: 'center', marginTop: theme.spacing.md },
   entryCard: {
     backgroundColor: theme.colors.surface.one, borderRadius: 16, padding: theme.spacing.md,
     marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,
@@ -202,6 +325,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text.primary, marginBottom: theme.spacing.md,
   },
   moodPickerLabel: { fontSize: 12, fontWeight: '700', color: theme.colors.text.primary, marginBottom: theme.spacing.xs },
+  moodPickerOptional: { fontWeight: '400', color: theme.colors.text.secondary },
   moodPickerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: theme.spacing.lg },
   moodPickerBtn: { alignItems: 'center', gap: 4 },
   moodPickerCircle: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
@@ -212,6 +336,32 @@ const styles = StyleSheet.create({
   cancelText: { fontWeight: '700', color: theme.colors.text.primary, fontSize: 13 },
   saveBtn: { flex: 2, backgroundColor: theme.colors.primary, borderRadius: 16, padding: 14, alignItems: 'center' },
   saveText: { fontWeight: '700', color: '#fff', fontSize: 13 },
+  // Detail modal
+  detailSheet: {
+    backgroundColor: theme.colors.surface.one, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: theme.spacing.lg, height: '90%',
+  },
+  detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md },
+  detailDate: { fontSize: 11, fontWeight: '700', color: theme.colors.text.secondary, textTransform: 'uppercase', letterSpacing: 0.6 },
+  closeBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: theme.colors.surface.two, alignItems: 'center', justifyContent: 'center' },
+  moodBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginBottom: theme.spacing.sm },
+  moodBadgeText: { fontSize: 13, fontWeight: '700' },
+  detailSection: { marginBottom: theme.spacing.md },
+  detailLabel: { fontSize: 10, fontWeight: '700', color: theme.colors.text.secondary, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
+  detailPromptValue: { fontSize: theme.typography.fontSize.paragraph.sm, color: theme.colors.text.primary, fontStyle: 'italic', lineHeight: 20 },
+  detailScroll: { flex: 1, marginTop: 6 },
+  detailContent: { fontSize: theme.typography.fontSize.paragraph.sm, color: theme.colors.text.primary, lineHeight: 24 },
+  swipeDeleteAction: {
+    backgroundColor: '#e5484d', justifyContent: 'center', alignItems: 'center',
+    width: 80, borderRadius: 16, marginBottom: 10,
+  },
+  swipeDeleteText: { color: '#fff', fontSize: 11, fontWeight: '700', marginTop: 2 },
+  deleteBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    marginTop: theme.spacing.md, paddingVertical: 14, borderRadius: 16,
+    backgroundColor: '#fee2e2',
+  },
+  deleteBtnText: { fontSize: 13, fontWeight: '700', color: '#ef4444' },
 });
 
 export default Journal;

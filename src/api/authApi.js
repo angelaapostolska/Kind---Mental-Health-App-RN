@@ -26,11 +26,7 @@ export const authApi = createApi({
           await SecureStore.setItemAsync('access_token', data.token);
           dispatch(setUserName(data.name));
           dispatch(setUserEmail(data.email));
-          const res = await fetch(`${env.base_api_url}api/users/email/${data.email}`, {
-            headers: { Authorization: `Bearer ${data.token}` },
-          });
-          const user = await res.json();
-          dispatch(setUserId(user.id));
+          dispatch(setUserId(data.id));
         } catch (err) {
           console.warn('Login failed', err);
         }
@@ -48,11 +44,7 @@ export const authApi = createApi({
           await SecureStore.setItemAsync('access_token', data.token);
           dispatch(setUserName(data.name));
           dispatch(setUserEmail(data.email));
-          const res = await fetch(`${env.base_api_url}api/users/email/${data.email}`, {
-            headers: { Authorization: `Bearer ${data.token}` },
-          });
-          const user = await res.json();
-          dispatch(setUserId(user.id));
+          dispatch(setUserId(data.id));
         } catch (err) {
           console.warn('Register failed', err);
         }
