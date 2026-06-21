@@ -28,7 +28,7 @@ const baseQueryWithBearer = async (args, api, extraOptions) => {
 export const cdtApi = createApi({
   reducerPath: 'cdtApi',
   baseQuery: baseQueryWithBearer,
-  tagTypes: ['User', 'MoodEntry', 'JournalEntry', 'Emotion', 'MoodFactor', 'Habit', 'HabitLog'],
+  tagTypes: ['User', 'MoodEntry', 'JournalEntry', 'JournalPrompt', 'Emotion', 'MoodFactor', 'Habit', 'HabitLog'],
   endpoints: (builder) => ({
     // --- User ---
     getUserByEmail: builder.query({
@@ -101,6 +101,10 @@ export const cdtApi = createApi({
       }),
       invalidatesTags: ['JournalEntry'],
     }),
+    getJournalPromptsByType: builder.query({
+      query: (type) => `api/journal-prompts/type/${type}`,
+      providesTags: ['JournalPrompt'],
+    }),
 
     // --- Emotions (feeling tags) ---
     getEmotions: builder.query({
@@ -164,4 +168,5 @@ export const {
   useCreateHabitMutation,
   useGetHabitTodayQuery,
   useToggleHabitTodayMutation,
+  useGetJournalPromptsByTypeQuery,
 } = cdtApi;
