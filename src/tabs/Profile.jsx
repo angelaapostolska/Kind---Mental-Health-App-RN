@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'rea
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as SecureStore from 'expo-secure-store';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { setSignedIn } from '@/store/commonSlices/userSlice';
@@ -15,6 +16,7 @@ const SETTINGS = [
 ];
 
 const Profile = () => {
+  const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
   const appState = useAppSelector((s) => s.appState);
   const userName = appState?.userName || 'Friend';
@@ -35,7 +37,7 @@ const Profile = () => {
   };
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: insets.top + theme.spacing.md }]} showsVerticalScrollIndicator={false}>
       <View style={styles.profileHeader}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{initials}</Text>
