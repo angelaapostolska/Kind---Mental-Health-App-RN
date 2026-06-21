@@ -8,30 +8,30 @@ const hideToast = () => Toast.hide();
 
 export const toastConfig = {
   error: ({ text1, text2 }) => (
-    <View style={styles.container}>
+    <View style={[styles.container, styles.errorContainer]}>
       <View style={styles.toastWrapper}>
         <View style={styles.leftContent}>
           <MaterialIcons name="warning" size={20} color={theme.colors.icon.error} />
           <View style={styles.textContainer}>
-            <Text style={styles.title}>{text1}</Text>
-            {text2 && <Text style={styles.message}>{text2}</Text>}
+            <Text style={[styles.title, styles.errorText]}>{text1}</Text>
+            {text2 && <Text style={[styles.message, styles.errorText]}>{text2}</Text>}
           </View>
         </View>
-        <MaterialIcons name="close" size={20} color={theme.colors.icon.onAction} onPress={hideToast} />
+        <MaterialIcons name="close" size={20} color={theme.colors.icon.error} onPress={hideToast} />
       </View>
     </View>
   ),
   success: ({ text1, text2 }) => (
-    <View style={styles.container}>
+    <View style={[styles.container, styles.successContainer]}>
       <View style={styles.toastWrapper}>
         <View style={styles.leftContent}>
-          <MaterialIcons name="check-circle" size={20} color={theme.colors.icon.success} onPress={hideToast} />
+          <MaterialIcons name="check-circle" size={20} color={theme.colors.icon.action} onPress={hideToast} />
           <View style={styles.textContainer}>
-            <Text style={styles.title}>{text1}</Text>
-            {text2 && <Text style={styles.message}>{text2}</Text>}
+            <Text style={[styles.title, styles.successText]}>{text1}</Text>
+            {text2 && <Text style={[styles.message, styles.successText]}>{text2}</Text>}
           </View>
         </View>
-        <MaterialIcons name="close" size={20} color={theme.colors.icon.onAction} onPress={hideToast} />
+        <MaterialIcons name="close" size={20} color={theme.colors.icon.action} onPress={hideToast} />
       </View>
     </View>
   ),
@@ -39,11 +39,19 @@ export const toastConfig = {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: theme.colors.surface.inverse,
     padding: theme.spacing.md,
     borderRadius: 16,
     marginHorizontal: theme.spacing.md,
     width: '93%',
+    borderWidth: 1,
+  },
+  successContainer: {
+    backgroundColor: theme.colors.surface.brandPrimary,
+    borderColor: theme.colors.border.action,
+  },
+  errorContainer: {
+    backgroundColor: theme.colors.surface.error,
+    borderColor: theme.colors.border.error,
   },
   toastWrapper: {
     flexDirection: 'row',
@@ -57,13 +65,17 @@ const styles = StyleSheet.create({
     marginHorizontal: theme.spacing.xs,
   },
   title: {
-    color: theme.colors.text.onAction,
     fontWeight: theme.typography.fontVariants.secondary.regular,
     fontSize: theme.typography.fontSize.paragraph.md,
   },
   message: {
-    color: theme.colors.text.onAction,
     fontWeight: theme.typography.fontVariants.secondary.regular,
     fontSize: theme.typography.fontSize.paragraph.sm,
+  },
+  successText: {
+    color: theme.colors.text.action,
+  },
+  errorText: {
+    color: theme.colors.text.error,
   },
 });

@@ -1,54 +1,70 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { theme } from '@/constants/theme';
-import { MOOD_LEVELS, FEELINGS, FACTORS, moodColor, moodLabel, moodEmoji } from '@/utils';
-import { useCreateMoodEntryMutation } from '@/api/api';
-
-const MOCK_MOODS = {
-  '2026-05-01': 1, '2026-05-02': 2, '2026-05-03': 3, '2026-05-04': 1,
-  '2026-05-05': 2, '2026-05-06': 4, '2026-05-07': 2,
-};
+import { MOOD_LEVELS, moodColor, moodLabel, showErrorToast } from '@/utils';
+import { useAppSelector } from '@/store/store';
+import {
+  useGetMoodEntriesByMonthQuery,
+  useCreateMoodEntryMutation,
+  useGetEmotionsQuery,
+  useGetMoodFactorsQuery,
+} from '@/api/api';
 
 const Mood = () => {
+  const userId = useAppSelector((state) => state.userState.userId);
+
   const [tab, setTab] = useState('track');
   const [step, setStep] = useState(1);
   const [mood, setMood] = useState(null);
   const [feeling, setFeeling] = useState(null);
   const [factor, setFactor] = useState(null);
   const [done, setDone] = useState(false);
-  const [month, setMonth] = useState(new Date(2026, 4, 1));
-  const [createMoodEntry] = useCreateMoodEntryMutation();
+  const [month, setMonth] = useState(new Date());
 
-  const reset = () => {
-    setStep(1);
-    setMood(null);
-    setFeeling(null);
-    setFactor(null);
-    setDone(false);
-  };
+  const year = month.getFullYear();
+  const monthNum = month.getMonth() + 1;
+
+  // --- Backend data ---
+  const { data: emotions = [], isLoading: emotionsLoading } = useGetEmotionsQuery();
+  const { data: moodFactors = [], isLoading: factorsLoading } = useGetMoodFactorsQuery();
+  const {
+    data: monthEntries = [],
+    isLoading: entriesLoading,
+    refetch: refetchEntries,
+  } = useGetMoodEntriesByMonthQuery({ userId, year, month: monthNum }, { skip: !userId });
+  const [createMoodEntry, { isLoading: saving }] = useCreateMoodEntryMutation();
+
+  useEffect(() => {
+    if (userId) refetchEntries();
+  }, [month, userId]);
+
+  const reset = () => { setStep(1); setMood(null); setFeeling(null); setFactor(null); setDone(false); };
 
   const next = async () => {
-    // CHANGED: now async
-    if (step === 3) {
-      try {
-        // ADDED
-        const today = new Date().toISOString().split('T')[0]; // ADDED: "YYYY-MM-DD"
-        const result = await createMoodEntry({
-          // ADDED: fire the save
-          date: today,
-          moodValue: mood, // mood is 1-5 here; BE accepts 1-10
-          note: `${feeling} · ${factor}`, // stash the picks in the note for now
-        }).unwrap(); // ADDED: unwrap so errors throw
-        console.log('Saved to DB!', result); // ADDED: shows in Metro terminal
-      } catch (e) {
-        // ADDED
-        console.log('Save failed:', e); // ADDED: shows the error if it fails
-      }
-      setDone(true);
+    if (step < 3) {
+      setStep(step + 1);
       return;
     }
-    setStep(step + 1);
+
+    if (!userId) {
+      showErrorToast('Please log in again before saving a mood entry');
+      return;
+    }
+
+    try {
+      await createMoodEntry({
+        date: new Date().toISOString().slice(0, 10),
+        moodValue: mood,
+        note: '',
+        user: { id: userId },
+        selectedEmotions: feeling ? [{ id: feeling.id }] : [],
+        selectedFactors: factor ? [{ id: factor.id }] : [],
+      }).unwrap();
+      setDone(true);
+    } catch (err) {
+      showErrorToast('Could not save your mood entry. Please try again.');
+    }
   };
 
   const daysIn = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
@@ -56,6 +72,12 @@ const Mood = () => {
   const monthName = month.toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const ds = (day) => `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  // Map fetched entries by date string for quick calendar lookup
+  const entriesByDate = {};
+  monthEntries.forEach((e) => {
+    entriesByDate[e.date] = e.moodValue;
+  });
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -81,7 +103,7 @@ const Mood = () => {
               </View>
               <Text style={styles.doneTitle}>Mood logged</Text>
               <Text style={styles.doneSub}>
-                {mood && moodLabel(mood)} · {feeling} · {factor}
+                {mood && moodLabel(mood)} · {feeling?.name} · {factor?.name}
               </Text>
               <TouchableOpacity onPress={reset} style={styles.logAnotherBtn}>
                 <Text style={styles.logAnotherText}>Log another</Text>
@@ -106,7 +128,9 @@ const Mood = () => {
                         <View style={[styles.moodCircle, { backgroundColor: m.color }, mood === m.level && styles.moodCircleActive]}>
                           <Text style={styles.moodEmoji}>{m.emoji}</Text>
                         </View>
-                        <Text style={styles.moodEmojiLabel}>{m.label.split(' ').pop()}</Text>
+                        <View style={styles.moodLabelBox}>
+                          <Text style={styles.moodEmojiLabel} numberOfLines={2}>{m.label}</Text>
+                        </View>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -117,13 +141,17 @@ const Mood = () => {
                 <View>
                   <Text style={styles.stepTitle}>Step 2</Text>
                   <Text style={styles.stepSub}>Choose a feeling</Text>
-                  <View style={styles.chipsWrap}>
-                    {FEELINGS.map((f) => (
-                      <TouchableOpacity key={f} onPress={() => setFeeling(f)} style={[styles.chip, feeling === f && styles.chipActive]}>
-                        <Text style={[styles.chipText, feeling === f && styles.chipTextActive]}>{f}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  {emotionsLoading ? (
+                    <ActivityIndicator color={theme.colors.primary} />
+                  ) : (
+                    <View style={styles.chipsWrap}>
+                      {emotions.map((f) => (
+                        <TouchableOpacity key={f.id} onPress={() => setFeeling(f)} style={[styles.chip, feeling?.id === f.id && styles.chipActive]}>
+                          <Text style={[styles.chipText, feeling?.id === f.id && styles.chipTextActive]}>{f.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -131,13 +159,17 @@ const Mood = () => {
                 <View>
                   <Text style={styles.stepTitle}>Step 3</Text>
                   <Text style={styles.stepSub}>What influenced your mood?</Text>
-                  <View style={styles.chipsWrap}>
-                    {FACTORS.map((f) => (
-                      <TouchableOpacity key={f} onPress={() => setFactor(f)} style={[styles.chip, factor === f && styles.chipActive]}>
-                        <Text style={[styles.chipText, factor === f && styles.chipTextActive]}>{f}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  {factorsLoading ? (
+                    <ActivityIndicator color={theme.colors.primary} />
+                  ) : (
+                    <View style={styles.chipsWrap}>
+                      {moodFactors.map((f) => (
+                        <TouchableOpacity key={f.id} onPress={() => setFactor(f)} style={[styles.chip, factor?.id === f.id && styles.chipActive]}>
+                          <Text style={[styles.chipText, factor?.id === f.id && styles.chipTextActive]}>{f.name}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -149,10 +181,12 @@ const Mood = () => {
                 )}
                 <TouchableOpacity
                   onPress={next}
-                  disabled={(step === 1 && !mood) || (step === 2 && !feeling) || (step === 3 && !factor)}
-                  style={[styles.navBtn, styles.navBtnNext, { opacity: ((step === 1 && !mood) || (step === 2 && !feeling) || (step === 3 && !factor)) ? 0.4 : 1 }]}
+                  disabled={(step === 1 && !mood) || (step === 2 && !feeling) || (step === 3 && !factor) || saving}
+                  style={[styles.navBtn, styles.navBtnNext, { opacity: ((step === 1 && !mood) || (step === 2 && !feeling) || (step === 3 && !factor) || saving) ? 0.4 : 1 }]}
                 >
-                  <Text style={styles.navBtnNextText}>{step === 3 ? 'Save mood' : 'Continue'}</Text>
+                  {saving ? <ActivityIndicator color="#fff" /> : (
+                    <Text style={styles.navBtnNextText}>{step === 3 ? 'Save mood' : 'Continue'}</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -161,19 +195,20 @@ const Mood = () => {
       )}
 
       {tab === 'insights' && (
-        <>
-          {/* Calendar */}
-          <View style={styles.card}>
-            <View style={styles.calHeader}>
-              <TouchableOpacity onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>
-                <MaterialIcons name="chevron-left" size={22} color={theme.colors.text.primary} />
-              </TouchableOpacity>
-              <Text style={styles.calTitle}>{monthName}</Text>
-              <TouchableOpacity onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>
-                <MaterialIcons name="chevron-right" size={22} color={theme.colors.text.primary} />
-              </TouchableOpacity>
-            </View>
+        <View style={styles.card}>
+          <View style={styles.calHeader}>
+            <TouchableOpacity onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>
+              <MaterialIcons name="chevron-left" size={22} color={theme.colors.text.primary} />
+            </TouchableOpacity>
+            <Text style={styles.calTitle}>{monthName}</Text>
+            <TouchableOpacity onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>
+              <MaterialIcons name="chevron-right" size={22} color={theme.colors.text.primary} />
+            </TouchableOpacity>
+          </View>
 
+          {entriesLoading ? (
+            <ActivityIndicator color={theme.colors.primary} style={{ marginVertical: theme.spacing.lg }} />
+          ) : (
             <View style={styles.calGrid}>
               {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
                 <Text key={i} style={styles.calWeekDay}>{d}</Text>
@@ -181,7 +216,7 @@ const Mood = () => {
               {Array.from({ length: firstDow }).map((_, i) => <View key={`e${i}`} style={styles.calCell} />)}
               {Array.from({ length: daysIn }).map((_, i) => {
                 const day = i + 1;
-                const m = MOCK_MOODS[ds(day)];
+                const m = entriesByDate[ds(day)];
                 return (
                   <View key={day} style={styles.calCell}>
                     <View style={[styles.calDay, { backgroundColor: m ? moodColor(m) : theme.colors.surface.three, opacity: m ? 1 : 0.4 }]}>
@@ -191,38 +226,18 @@ const Mood = () => {
                 );
               })}
             </View>
+          )}
 
-            {/* Legend */}
-            <View style={styles.legend}>
-              {MOOD_LEVELS.map((m) => (
-                <View key={m.level} style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: m.color }]} />
-                  <Text style={styles.legendText}>{m.label.split(' ').pop()}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-
-          {/* Patterns card */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Patterns</Text>
-            <Text style={styles.cardSubtitle}>Your feelings over the past 30 days</Text>
-            <View style={styles.radarPlaceholder}>
-              <Text style={styles.radarPlaceholderText}>Mood pattern chart{'\n'}(connect to live data)</Text>
-              <View style={styles.radarRow}>
-                {['Happy', 'Calm', 'Energetic', 'Anxious', 'Tired', 'Sad'].map((label, i) => {
-                  const values = [80, 65, 50, 30, 40, 20];
-                  return (
-                    <View key={label} style={styles.radarBarCol}>
-                      <View style={[styles.radarBar, { height: values[i] * 0.8, backgroundColor: theme.colors.primary, opacity: 0.6 }]} />
-                      <Text style={styles.radarLabel}>{label}</Text>
-                    </View>
-                  );
-                })}
+          {/* Legend */}
+          <View style={styles.legend}>
+            {MOOD_LEVELS.map((m) => (
+              <View key={m.level} style={styles.legendItem}>
+                <View style={[styles.legendDot, { backgroundColor: m.color }]} />
+                <Text style={styles.legendText}>{m.label}</Text>
               </View>
-            </View>
+            ))}
           </View>
-        </>
+        </View>
       )}
     </ScrollView>
   );
@@ -256,7 +271,15 @@ const styles = StyleSheet.create({
   moodCircle: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   moodCircleActive: { borderWidth: 3, borderColor: 'rgba(0,0,0,0.2)', transform: [{ scale: 1.1 }] },
   moodEmoji: { fontSize: 24 },
-  moodEmojiLabel: { fontSize: 9, fontWeight: '600', color: theme.colors.text.secondary, textAlign: 'center' },
+  moodEmojiLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.colors.text.secondary,
+    textAlign: 'center',
+    width: 62,
+    height: 28,
+    textAlignVertical: 'center',
+  },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.colors.surface.two },
   chipActive: { backgroundColor: theme.colors.primary },
@@ -267,7 +290,7 @@ const styles = StyleSheet.create({
   navBtnBack: { backgroundColor: theme.colors.surface.two },
   navBtnBackText: { fontWeight: '700', color: theme.colors.text.primary, fontSize: 13 },
   navBtnNext: { flex: 2, backgroundColor: theme.colors.primary },
-  navBtnNextText: { fontWeight: '700', color: '#fff', fontSize: 13 },
+  navBtnNextText: { fontWeight: '700', color: '#fff', fontSize: 15 },
   calHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md },
   calTitle: { fontSize: 14, fontWeight: '700', color: theme.colors.text.primary },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
@@ -279,14 +302,6 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 10, height: 10, borderRadius: 3 },
   legendText: { fontSize: 9, fontWeight: '600', color: theme.colors.text.secondary },
-  cardTitle: { fontSize: theme.typography.fontSize.paragraph.md, fontWeight: '700', color: theme.colors.text.primary },
-  cardSubtitle: { fontSize: 11, color: theme.colors.text.secondary, marginBottom: theme.spacing.md },
-  radarPlaceholder: { backgroundColor: theme.colors.surface.two, borderRadius: 16, padding: theme.spacing.md, alignItems: 'center' },
-  radarPlaceholderText: { fontSize: 11, color: theme.colors.text.secondary, textAlign: 'center', marginBottom: theme.spacing.md },
-  radarRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, height: 100 },
-  radarBarCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
-  radarBar: { width: '100%', borderRadius: 4 },
-  radarLabel: { fontSize: 8, fontWeight: '600', color: theme.colors.text.secondary, textAlign: 'center' },
 });
 
 export default Mood;
