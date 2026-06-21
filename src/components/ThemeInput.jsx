@@ -4,10 +4,10 @@ import PropTypes from 'prop-types';
 import { theme } from '@/constants/theme';
 
 const ThemeInput = forwardRef(
-  ({ value, placeholder, onChangeText, containerStyle, inputStyle, placeholderStyle, isValid = true, errorMessage, ...props }, ref) => {
+  ({ value, placeholder, onChangeText, containerStyle, inputStyle, placeholderStyle, isValid = true, isSuccess = false, errorMessage, ...props }, ref) => {
     return (
       <View>
-        <View style={[styles.container, containerStyle, !isValid && styles.containerError]}>
+        <View style={[styles.container, containerStyle, !isValid && styles.containerError, isSuccess && styles.containerSuccess]}>
           {!value ? <Text style={[styles.placeholder, placeholderStyle]}>{placeholder}</Text> : null}
           <TextInput ref={ref} value={value} onChangeText={onChangeText} style={[styles.input, inputStyle]} {...props} />
         </View>
@@ -27,6 +27,7 @@ ThemeInput.propTypes = {
   inputStyle: PropTypes.oneOfType([PropTypes.object, PropTypes.array]),
   placeholderStyle: PropTypes.oneOfType([PropTypes.object, PropTypes.array]),
   isValid: PropTypes.bool,
+  isSuccess: PropTypes.bool,
   errorMessage: PropTypes.string,
 };
 
@@ -42,6 +43,10 @@ const styles = StyleSheet.create({
   containerError: {
     borderBottomWidth: 3,
     borderBottomColor: theme.colors.text.error,
+  },
+  containerSuccess: {
+    borderBottomWidth: 3,
+    borderBottomColor: '#27ae60',
   },
   input: {
     fontSize: theme.typography.fontSize.paragraph.md,

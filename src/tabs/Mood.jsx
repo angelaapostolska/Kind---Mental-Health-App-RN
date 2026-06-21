@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { theme } from '@/constants/theme';
-import { MOOD_LEVELS, moodColor, moodLabel, showErrorToast } from '@/utils';
+import { MOOD_LEVELS, moodColor, moodLabel, showErrorToast, isoDate } from '@/utils';
 import { useAppSelector } from '@/store/store';
 import {
   useGetMoodEntriesByMonthQuery,
@@ -10,6 +10,18 @@ import {
   useGetEmotionsQuery,
   useGetMoodFactorsQuery,
 } from '@/api/api';
+
+// Maps the 5 frontend mood levels to a backend moodValue (1-10)
+const LEVEL_TO_VALUE = { 1: 10, 2: 8, 3: 6, 4: 4, 5: 2 };
+
+// Converts a backend moodValue (1-10) back to a frontend level (1-5) for display
+const moodValueToLevel = (v) => {
+  if (v >= 9) return 1;
+  if (v >= 7) return 2;
+  if (v >= 5) return 3;
+  if (v >= 3) return 4;
+  return 5;
+};
 
 const Mood = () => {
   const userId = useAppSelector((state) => state.userState.userId);
@@ -25,7 +37,6 @@ const Mood = () => {
   const year = month.getFullYear();
   const monthNum = month.getMonth() + 1;
 
-  // --- Backend data ---
   const { data: emotions = [], isLoading: emotionsLoading } = useGetEmotionsQuery();
   const { data: moodFactors = [], isLoading: factorsLoading } = useGetMoodFactorsQuery();
   const {
@@ -54,8 +65,8 @@ const Mood = () => {
 
     try {
       await createMoodEntry({
-        date: new Date().toISOString().slice(0, 10),
-        moodValue: mood,
+        date: isoDate(new Date()),
+        moodValue: LEVEL_TO_VALUE[mood],
         note: '',
         user: { id: userId },
         selectedEmotions: feeling ? [{ id: feeling.id }] : [],
@@ -71,9 +82,14 @@ const Mood = () => {
   const firstDow = new Date(month.getFullYear(), month.getMonth(), 1).getDay();
   const monthName = month.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-  const ds = (day) => `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const ds = (day) =>
+    `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
-  // Map fetched entries by date string for quick calendar lookup
+  const canProceed =
+    (step === 1 && mood !== null) ||
+    (step === 2 && feeling !== null) ||
+    (step === 3 && factor !== null);
+
   const entriesByDate = {};
   monthEntries.forEach((e) => {
     entriesByDate[e.date] = e.moodValue;
@@ -181,8 +197,8 @@ const Mood = () => {
                 )}
                 <TouchableOpacity
                   onPress={next}
-                  disabled={(step === 1 && !mood) || (step === 2 && !feeling) || (step === 3 && !factor) || saving}
-                  style={[styles.navBtn, styles.navBtnNext, { opacity: ((step === 1 && !mood) || (step === 2 && !feeling) || (step === 3 && !factor) || saving) ? 0.4 : 1 }]}
+                  disabled={!canProceed || saving}
+                  style={[styles.navBtn, styles.navBtnNext, { opacity: !canProceed || saving ? 0.4 : 1 }]}
                 >
                   {saving ? <ActivityIndicator color="#fff" /> : (
                     <Text style={styles.navBtnNextText}>{step === 3 ? 'Save mood' : 'Continue'}</Text>
@@ -216,11 +232,11 @@ const Mood = () => {
               {Array.from({ length: firstDow }).map((_, i) => <View key={`e${i}`} style={styles.calCell} />)}
               {Array.from({ length: daysIn }).map((_, i) => {
                 const day = i + 1;
-                const m = entriesByDate[ds(day)];
+                const level = entriesByDate[ds(day)] ? moodValueToLevel(entriesByDate[ds(day)]) : undefined;
                 return (
                   <View key={day} style={styles.calCell}>
-                    <View style={[styles.calDay, { backgroundColor: m ? moodColor(m) : theme.colors.surface.three, opacity: m ? 1 : 0.4 }]}>
-                      <Text style={[styles.calDayText, { color: m ? '#fff' : theme.colors.text.secondary }]}>{day}</Text>
+                    <View style={[styles.calDay, { backgroundColor: level ? moodColor(level) : theme.colors.surface.three, opacity: level ? 1 : 0.4 }]}>
+                      <Text style={[styles.calDayText, { color: level ? '#fff' : theme.colors.text.secondary }]}>{day}</Text>
                     </View>
                   </View>
                 );
