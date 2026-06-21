@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 import { MOOD_LEVELS, moodColor, moodLabel, AFFIRMATIONS, getGreeting, getCurrentWeek, isoDate, showSuccessToast, showErrorToast } from '@/utils';
 import { useAppSelector } from '@/store/store';
@@ -77,9 +78,21 @@ const MoodSlider = ({ value = 3, onChange, saving }) => {
       </View>
       <View style={moodStyles.row}>
         {MOOD_LEVELS.map((m) => (
-          <TouchableOpacity key={m.level} disabled={saving} onPress={() => { setV(m.level); onChange?.(m.level); }} style={moodStyles.emojiBtn}>
+          <TouchableOpacity
+            key={m.level}
+            disabled={saving}
+            onPress={() => { setV(m.level); onChange?.(m.level); }}
+            style={moodStyles.emojiBtn}
+          >
             <Text style={[moodStyles.emoji, v === m.level && moodStyles.emojiActive]}>{m.emoji}</Text>
-            <Text style={[moodStyles.emojiLabel, v === m.level && { color: moodColor(m.level) }]}>{m.label.split(' ').pop()}</Text>
+            <View style={moodStyles.emojiLabelBox}>
+              <Text
+                style={[moodStyles.emojiLabel, v === m.level && { color: moodColor(m.level), fontWeight: '700' }]}
+                numberOfLines={2}
+              >
+                {m.label}
+              </Text>
+            </View>
           </TouchableOpacity>
         ))}
       </View>
@@ -135,13 +148,15 @@ const moodStyles = StyleSheet.create({
   badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
   row: { flexDirection: 'row', justifyContent: 'space-between' },
-  emojiBtn: { alignItems: 'center', gap: 4 },
+  emojiBtn: { alignItems: 'center', gap: 4, flex: 1 },
   emoji: { fontSize: 30, opacity: 0.6 },
   emojiActive: { opacity: 1, transform: [{ scale: 1.2 }] },
-  emojiLabel: { fontSize: 9, fontWeight: '600', color: theme.colors.text.secondary },
+  emojiLabelBox: { height: 26, justifyContent: 'center' },
+  emojiLabel: { fontSize: 9, fontWeight: '600', color: theme.colors.text.secondary, textAlign: 'center' },
 });
 
 const Home = () => {
+  const insets = useSafeAreaInsets();
   const appState = useAppSelector((s) => s.appState);
   const userName = appState?.userName || 'Friend';
 
@@ -221,7 +236,7 @@ const Home = () => {
   const todayStr = isoDate(new Date());
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: insets.top + theme.spacing.md }]} showsVerticalScrollIndicator={false}>
       {/* Hidden per-habit status subscribers (keep the completed count accurate) */}
       {habits.map((h) => (
         <HabitStatus key={`status-${h.id}`} habit={h} onStatus={handleStatus} />

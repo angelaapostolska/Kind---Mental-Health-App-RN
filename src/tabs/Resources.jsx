@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated, Easing } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 
 const EXERCISES = [
@@ -20,6 +21,7 @@ const PHASE_SEQUENCE = (ex) => {
 };
 
 const Resources = () => {
+  const insets = useSafeAreaInsets();
   const [exercise, setExercise] = useState(EXERCISES[0]);
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [timer, setTimer] = useState(0);
@@ -62,11 +64,11 @@ const Resources = () => {
   const progressPct = running ? timer / Math.max(phaseDur(currentPhase), 1) : 0;
   const scale = currentPhase === 'inhale' ? 1 + progressPct * 0.5
     : currentPhase === 'exhale' ? 1.5 - progressPct * 0.5
-    : currentPhase === 'hold' ? 1.5
-    : 1;
+      : currentPhase === 'hold' ? 1.5
+        : 1;
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: insets.top + theme.spacing.md }]} showsVerticalScrollIndicator={false}>
       <Text style={styles.pageTitle}>Breathe</Text>
       <Text style={styles.pageSubtitle}>Find your calm</Text>
 
