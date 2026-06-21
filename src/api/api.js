@@ -107,6 +107,11 @@ export const cdtApi = createApi({
       query: () => 'api/emotions',
       providesTags: ['Emotion'],
     }),
+    // ADDED: fetch only the emotions that belong to one mood category (Step 2 filtering)
+    getEmotionsByCategory: builder.query({
+      query: (category) => `api/emotions/category/${category}`,
+      providesTags: ['Emotion'],
+    }),
 
     // --- Mood Factors (influencing factors) ---
     getMoodFactors: builder.query({
@@ -153,6 +158,7 @@ export const {
   useUpdateJournalEntryMutation,
   useDeleteJournalEntryMutation,
   useGetEmotionsQuery,
+  useGetEmotionsByCategoryQuery, // ADDED: hook for category-filtered emotions
   useGetMoodFactorsQuery,
   useGetHabitsQuery,
   useCreateHabitMutation,
