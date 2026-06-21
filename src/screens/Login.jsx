@@ -4,7 +4,7 @@ import { useLoginMutation } from '@/api/authApi';
 import { ScreenTitle, ThemeInput, ThemePasswordInput, ThemeButton } from '@/components';
 import NavigationScreens from '@/config/NavigationScreens';
 import { theme } from '@/constants/theme';
-import { setSignedIn } from '@/store/commonSlices/userSlice';
+import { setSignedIn, setUserId, setUserEmail } from '@/store/commonSlices/userSlice';
 import { useAppDispatch } from '@/store/store';
 import { showErrorToast } from '@/utils';
 
@@ -20,7 +20,11 @@ const Login = ({ navigation }) => {
       return;
     }
     try {
-      await login({ email, password }).unwrap();
+      // login now returns the user id directly in the response
+      const userData = await login({ email, password }).unwrap();
+
+      dispatch(setUserId(userData.id));
+      dispatch(setUserEmail(email));
       dispatch(setSignedIn(true));
     } catch (err) {
       let errorMsg = 'Login failed. Please check your credentials.';

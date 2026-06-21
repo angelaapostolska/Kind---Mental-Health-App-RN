@@ -1,28 +1,61 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, Dimensions,
+  TextInput, Modal, Dimensions, ActivityIndicator,
 } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { theme } from '@/constants/theme';
-import { MOOD_LEVELS, moodColor, moodLabel, AFFIRMATIONS, getGreeting, getCurrentWeek, isoDate } from '@/utils';
+import { MOOD_LEVELS, moodColor, moodLabel, AFFIRMATIONS, getGreeting, getCurrentWeek, isoDate, showSuccessToast, showErrorToast } from '@/utils';
 import { useAppSelector } from '@/store/store';
+import {
+  useCreateMoodEntryMutation,
+  useGetMoodEntriesQuery,
+  useGetHabitsQuery,
+  useCreateHabitMutation,
+  useGetHabitTodayQuery,
+  useToggleHabitTodayMutation,
+} from '@/api/api';
 
 const { width } = Dimensions.get('window');
 
-const HABIT_ICONS = {
-  Meditate: 'weather-windy',
-  'Drink Water': 'water',
-  Exercise: 'dumbbell',
-  Read: 'book-open-variant',
-  Stretch: 'human-handsup',
-  Walk: 'walk',
-  'Sleep early': 'moon-waning-crescent',
-  Gratitude: 'heart',
+// Map a habit's iconIdentifier (or name) to a MaterialCommunityIcons glyph
+const ICON_BY_IDENTIFIER = {
+  meditation: 'weather-windy',
+  exercise: 'dumbbell',
+  journal: 'book-open-variant',
+  phone: 'cellphone',
+  book: 'book-open-variant',
+  moon: 'moon-waning-crescent',
+  coffee: 'coffee',
+  heart: 'heart',
+  walk: 'walk',
+  run: 'run',
+  people: 'account-group',
+  'no-drink': 'cup-off',
+  food: 'food',
+  work: 'briefcase',
+  sun: 'white-balance-sunny',
+  supplement: 'pill',
+  yoga: 'yoga',
+  water: 'water',
+  prayer: 'hands-pray',
+  stretch: 'human-handsup',
 };
 
-const GENERAL_HABITS = ['Meditate', 'Drink Water', 'Exercise', 'Read', 'Stretch', 'Walk', 'Sleep early', 'Gratitude'];
+const SUGGESTED_HABITS = [
+  { name: 'Meditate', iconIdentifier: 'meditation', colorHex: '#8B5CF6' },
+  { name: 'Drink Water', iconIdentifier: 'water', colorHex: '#3B82F6' },
+  { name: 'Exercise', iconIdentifier: 'exercise', colorHex: '#10B981' },
+  { name: 'Read', iconIdentifier: 'book', colorHex: '#F59E0B' },
+  { name: 'Stretch', iconIdentifier: 'stretch', colorHex: '#EC4899' },
+  { name: 'Walk', iconIdentifier: 'walk', colorHex: '#10B981' },
+  { name: 'Sleep early', iconIdentifier: 'moon', colorHex: '#6366F1' },
+  { name: 'Gratitude', iconIdentifier: 'heart', colorHex: '#F59E0B' },
+];
+
+const habitIconName = (habit) =>
+  ICON_BY_IDENTIFIER[habit.iconIdentifier] || ICON_BY_IDENTIFIER[(habit.name || '').toLowerCase()] || 'checkbox-marked-circle';
 
 const MEDITATION_TYPES = [
   { name: 'Body Scan', desc: 'Release tension head to toe' },
@@ -31,17 +64,8 @@ const MEDITATION_TYPES = [
   { name: 'Sleep', desc: 'Drift off peacefully' },
 ];
 
-const MOCK_MOODS = {
-  '2026-05-04': 2, '2026-05-05': 3, '2026-05-06': 1, '2026-05-08': 4, '2026-05-09': 2,
-};
-
-const MoodSlider = ({ value = 3, onChange }) => {
+const MoodSlider = ({ value = 3, onChange, saving }) => {
   const [v, setV] = useState(value);
-  const handle = (delta) => {
-    const next = Math.min(5, Math.max(1, v + delta));
-    setV(next);
-    onChange?.(next);
-  };
 
   return (
     <View style={moodStyles.container}>
@@ -53,13 +77,54 @@ const MoodSlider = ({ value = 3, onChange }) => {
       </View>
       <View style={moodStyles.row}>
         {MOOD_LEVELS.map((m) => (
-          <TouchableOpacity key={m.level} onPress={() => { setV(m.level); onChange?.(m.level); }} style={moodStyles.emojiBtn}>
+          <TouchableOpacity key={m.level} disabled={saving} onPress={() => { setV(m.level); onChange?.(m.level); }} style={moodStyles.emojiBtn}>
             <Text style={[moodStyles.emoji, v === m.level && moodStyles.emojiActive]}>{m.emoji}</Text>
             <Text style={[moodStyles.emojiLabel, v === m.level && { color: moodColor(m.level) }]}>{m.label.split(' ').pop()}</Text>
           </TouchableOpacity>
         ))}
       </View>
     </View>
+  );
+};
+
+// Invisible subscriber that keeps the parent's completion map in sync (one per habit)
+const HabitStatus = ({ habit, onStatus }) => {
+  const { data } = useGetHabitTodayQuery(habit.id);
+  const done = !!data?.completed;
+  useEffect(() => {
+    onStatus(habit.id, done);
+  }, [habit.id, done, onStatus]);
+  return null;
+};
+
+// A visible, tappable habit row backed by the DB
+const HabitRow = ({ habit }) => {
+  const { data } = useGetHabitTodayQuery(habit.id);
+  const [toggleHabitToday, { isLoading }] = useToggleHabitTodayMutation();
+  const done = !!data?.completed;
+
+  const onPress = async () => {
+    try {
+      await toggleHabitToday({ habitId: habit.id, completed: !done }).unwrap();
+    } catch (err) {
+      showErrorToast('Could not update habit. Please try again.');
+    }
+  };
+
+  return (
+    <TouchableOpacity onPress={onPress} disabled={isLoading} style={styles.habitRow} activeOpacity={0.7}>
+      <View style={[styles.habitIcon, { backgroundColor: theme.colors.surface.brandPrimary }]}>
+        <MaterialCommunityIcons name={habitIconName(habit)} size={16} color={habit.colorHex || theme.colors.primary} />
+      </View>
+      <Text style={[styles.habitName, done && styles.habitDone]}>{habit.name}</Text>
+      {isLoading ? (
+        <ActivityIndicator size="small" color={theme.colors.primary} />
+      ) : (
+        <View style={[styles.checkbox, done && styles.checkboxDone]}>
+          {done && <MaterialIcons name="check" size={12} color="#fff" />}
+        </View>
+      )}
+    </TouchableOpacity>
   );
 };
 
@@ -80,13 +145,70 @@ const Home = () => {
   const appState = useAppSelector((s) => s.appState);
   const userName = appState?.userName || 'Friend';
 
+  const userId = useAppSelector((state) => state.userState.userId);
+  const [createMoodEntry, { isLoading: savingMood }] = useCreateMoodEntryMutation();
+
+  // Real mood entries for this user (used by the Week in Review chart)
+  const { data: moodEntries = [] } = useGetMoodEntriesQuery(userId, { skip: !userId });
+  const moodsByDate = {};
+  moodEntries.forEach((e) => {
+    moodsByDate[e.date] = e.moodValue;
+  });
+
+  // Real habits for this user
+  const { data: habits = [], isLoading: habitsLoading } = useGetHabitsQuery(userId, { skip: !userId });
+  const [createHabit] = useCreateHabitMutation();
+
+  // Completion map maintained by the per-habit HabitStatus subscribers
+  const [completedMap, setCompletedMap] = useState({});
+  const handleStatus = useCallback((habitId, done) => {
+    setCompletedMap((prev) => (prev[habitId] === done ? prev : { ...prev, [habitId]: done }));
+  }, []);
+  const completedToday = habits.reduce((n, h) => n + (completedMap[h.id] ? 1 : 0), 0);
+
+  const handleMoodSelect = async (level) => {
+    if (!userId) {
+      showErrorToast('Please log in again to save your mood');
+      return;
+    }
+    try {
+      await createMoodEntry({
+        date: isoDate(new Date()),
+        moodValue: level,
+        note: '',
+        user: { id: userId },
+        selectedEmotions: [],
+        selectedFactors: [],
+      }).unwrap();
+      showSuccessToast('Mood saved', `Logged as ${moodLabel(level)}`);
+    } catch (err) {
+      showErrorToast('Could not save your mood. Please try again.');
+    }
+  };
+
+  const addHabit = async (spec) => {
+    if (!userId) return;
+    const name = (typeof spec === 'string' ? spec : spec.name).trim();
+    if (!name || habits.some((h) => h.name.toLowerCase() === name.toLowerCase())) return;
+    try {
+      await createHabit({
+        userId,
+        data: {
+          name,
+          description: '',
+          colorHex: spec.colorHex || '#6C5CE7',
+          iconIdentifier: spec.iconIdentifier || '',
+          creationDate: isoDate(new Date()),
+          isSystemHabit: false,
+        },
+      }).unwrap();
+      setCustomHabit('');
+    } catch (err) {
+      showErrorToast('Could not add habit. Please try again.');
+    }
+  };
+
   const [affirmation] = useState(AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)]);
-  const [habits, setHabits] = useState([
-    { name: 'Meditate', done: true },
-    { name: 'Drink Water', done: false },
-    { name: 'Exercise', done: false },
-    { name: 'Read', done: true },
-  ]);
   const [habitModal, setHabitModal] = useState(false);
   const [medModal, setMedModal] = useState(false);
   const [medMode, setMedMode] = useState('sound');
@@ -97,17 +219,14 @@ const Home = () => {
   const greeting = getGreeting();
   const currentWeek = getCurrentWeek();
   const todayStr = isoDate(new Date());
-  const completedToday = habits.filter((h) => h.done).length;
-
-  const toggleHabit = (i) => setHabits((h) => h.map((x, idx) => (idx === i ? { ...x, done: !x.done } : x)));
-  const addHabit = (name) => {
-    if (!name.trim() || habits.some((h) => h.name === name)) return;
-    setHabits([...habits, { name, done: false }]);
-    setCustomHabit('');
-  };
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      {/* Hidden per-habit status subscribers (keep the completed count accurate) */}
+      {habits.map((h) => (
+        <HabitStatus key={`status-${h.id}`} habit={h} onStatus={handleStatus} />
+      ))}
+
       {/* Header */}
       <View style={styles.header}>
         <View>
@@ -127,7 +246,7 @@ const Home = () => {
 
       {/* Mood Slider */}
       <View style={styles.card}>
-        <MoodSlider />
+        <MoodSlider onChange={handleMoodSelect} saving={savingMood} />
       </View>
 
       {/* Week in Review */}
@@ -139,11 +258,11 @@ const Home = () => {
         <View style={styles.weekRow}>
           {currentWeek.map(({ date, dayLabel }, i) => {
             const ds = isoDate(date);
-            const moodLvl = MOCK_MOODS[ds] || null;
+            const moodLvl = moodsByDate[ds] || null;
             const isToday = ds === todayStr;
             return (
               <View key={i} style={styles.weekCol}>
-                <View style={[styles.weekBar, { backgroundColor: moodLvl ? moodColor(moodLvl) : theme.colors.surface.three, opacity: moodLvl ? 0.9 : 0.3, height: moodLvl ? 40 + (5 - moodLvl) * 10 : 8 }]} />
+                <View style={[styles.weekBar, { backgroundColor: moodLvl ? moodColor(moodLvl) : theme.colors.surface.three, opacity: moodLvl ? 0.9 : 0.3, height: moodLvl ? 20 + moodLvl * 10 : 8 }]} />
                 <Text style={[styles.weekDay, isToday && { color: theme.colors.primary }]}>{dayLabel}</Text>
               </View>
             );
@@ -152,24 +271,24 @@ const Home = () => {
       </View>
 
       {/* Habits Card */}
-      <TouchableOpacity style={styles.card} onPress={() => setHabitModal(true)} activeOpacity={0.8}>
+      <View style={styles.card}>
         <View style={styles.cardHeader}>
           <Text style={styles.cardTitle}>Today's Habits</Text>
           <Text style={[styles.cardSubtitle, { color: theme.colors.primary }]}>{completedToday}/{habits.length}</Text>
         </View>
-        {habits.slice(0, 3).map((h, i) => (
-          <View key={h.name} style={styles.habitRow}>
-            <View style={styles.habitIcon}>
-              <MaterialCommunityIcons name={HABIT_ICONS[h.name] || 'checkbox-marked-circle'} size={14} color={theme.colors.primary} />
-            </View>
-            <Text style={[styles.habitName, h.done && styles.habitDone]}>{h.name}</Text>
-            <View style={[styles.checkbox, h.done && styles.checkboxDone]}>
-              {h.done && <MaterialIcons name="check" size={10} color="#fff" />}
-            </View>
-          </View>
-        ))}
-        <Text style={styles.seeMore}>Tap to manage habits →</Text>
-      </TouchableOpacity>
+
+        {habitsLoading ? (
+          <ActivityIndicator color={theme.colors.primary} style={{ marginVertical: theme.spacing.md }} />
+        ) : habits.length === 0 ? (
+          <Text style={styles.emptyText}>No habits yet. Tap below to add some.</Text>
+        ) : (
+          habits.slice(0, 3).map((h) => <HabitRow key={h.id} habit={h} />)
+        )}
+
+        <TouchableOpacity onPress={() => setHabitModal(true)} activeOpacity={0.7}>
+          <Text style={styles.seeMore}>Tap to manage habits →</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Meditation Card */}
       <TouchableOpacity style={styles.meditationCard} onPress={() => setMedModal(true)} activeOpacity={0.8}>
@@ -198,24 +317,14 @@ const Home = () => {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {habits.map((h, i) => (
-                <TouchableOpacity key={h.name} onPress={() => toggleHabit(i)} style={styles.habitModalRow}>
-                  <View style={styles.habitIcon}>
-                    <MaterialCommunityIcons name={HABIT_ICONS[h.name] || 'checkbox-marked-circle'} size={16} color={theme.colors.primary} />
-                  </View>
-                  <Text style={[styles.habitName, { flex: 1 }, h.done && styles.habitDone]}>{h.name}</Text>
-                  <View style={[styles.checkbox, h.done && styles.checkboxDone]}>
-                    {h.done && <MaterialIcons name="check" size={12} color="#fff" />}
-                  </View>
-                </TouchableOpacity>
-              ))}
+              {habits.map((h) => <HabitRow key={h.id} habit={h} />)}
 
               <Text style={[styles.cardTitle, { marginTop: theme.spacing.md, marginBottom: theme.spacing.xs }]}>Suggested</Text>
               <View style={styles.chipsRow}>
-                {GENERAL_HABITS.filter((g) => !habits.some((h) => h.name === g)).map((g) => (
-                  <TouchableOpacity key={g} onPress={() => addHabit(g)} style={styles.chip}>
+                {SUGGESTED_HABITS.filter((g) => !habits.some((h) => h.name.toLowerCase() === g.name.toLowerCase())).map((g) => (
+                  <TouchableOpacity key={g.name} onPress={() => addHabit(g)} style={styles.chip}>
                     <MaterialIcons name="add" size={12} color={theme.colors.text.primary} />
-                    <Text style={styles.chipText}>{g}</Text>
+                    <Text style={styles.chipText}>{g.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -331,6 +440,7 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.sm },
   cardTitle: { fontSize: theme.typography.fontSize.paragraph.md, fontWeight: '700', color: theme.colors.text.primary },
   cardSubtitle: { fontSize: 10, fontWeight: '600', color: theme.colors.text.secondary },
+  emptyText: { fontSize: theme.typography.fontSize.paragraph.sm, color: theme.colors.text.secondary, paddingVertical: theme.spacing.sm },
   weekRow: { flexDirection: 'row', alignItems: 'flex-end', height: 70, gap: 6 },
   weekCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
   weekBar: { width: '100%', borderRadius: 4 },
@@ -371,10 +481,6 @@ const styles = StyleSheet.create({
   habitsSummary: { alignItems: 'center', backgroundColor: theme.colors.surface.brandPrimary, borderRadius: 16, padding: theme.spacing.md, marginBottom: theme.spacing.md },
   habitsSummaryNum: { fontSize: 28, fontWeight: '800', color: theme.colors.primary },
   habitsSummaryLabel: { fontSize: 11, color: theme.colors.text.secondary, fontWeight: '600' },
-  habitModalRow: {
-    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm,
-    backgroundColor: theme.colors.surface.two, borderRadius: 16, padding: theme.spacing.sm, marginBottom: 8,
-  },
   chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: theme.spacing.md },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,

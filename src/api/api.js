@@ -28,16 +28,16 @@ const baseQueryWithBearer = async (args, api, extraOptions) => {
 export const cdtApi = createApi({
   reducerPath: 'cdtApi',
   baseQuery: baseQueryWithBearer,
-  tagTypes: ['User', 'MoodEntry', 'JournalEntry', 'Resource'],
+  tagTypes: ['User', 'MoodEntry', 'JournalEntry', 'Emotion', 'MoodFactor', 'Habit', 'HabitLog'],
   endpoints: (builder) => ({
     // --- User ---
-    getUserInfo: builder.query({
-      query: () => 'api/account/userinfo',
+    getUserByEmail: builder.query({
+      query: (email) => `api/users/email/${email}`,
       providesTags: ['User'],
     }),
     updateUser: builder.mutation({
       query: ({ id, data }) => ({
-        url: `api/account/update/${id}`,
+        url: `api/users/${id}`,
         method: 'PUT',
         body: data,
       }),
@@ -45,22 +45,19 @@ export const cdtApi = createApi({
     }),
 
     // --- Mood ---
-    // TODO: replace hardcoded user id 1 once auth is in
     getMoodEntries: builder.query({
-      query: () => 'api/mood-entries/user/1',
+      query: (userId) => `api/mood-entries/user/${userId}`,
+      providesTags: ['MoodEntry'],
+    }),
+    getMoodEntriesByMonth: builder.query({
+      query: ({ userId, year, month }) => `api/mood-entries/user/${userId}/calendar/${year}/${month}`,
       providesTags: ['MoodEntry'],
     }),
     createMoodEntry: builder.mutation({
       query: (data) => ({
         url: 'api/mood-entries',
         method: 'POST',
-        body: {
-          // CHANGED: was 'body: data' — BE requires these exact fields + a user id
-          date: data.date, // ADDED: "YYYY-MM-DD", required by BE (nullable=false)
-          moodValue: data.moodValue, // ADDED: integer 1-10, required (BE auto-derives moodCategory from it)
-          note: data.note || '', // ADDED: optional note
-          user: { id: 1 }, // ADDED: hardcoded test user — BE rejects entry if user missing/not found
-        },
+        body: data, // { date, moodValue, note, user: { id }, selectedEmotions, selectedFactors }
       }),
       invalidatesTags: ['MoodEntry'],
     }),
@@ -73,9 +70,8 @@ export const cdtApi = createApi({
     }),
 
     // --- Journal ---
-    // TODO: replace hardcoded user id 1 once auth is done
     getJournalEntries: builder.query({
-      query: () => 'api/journal-entries/user/1',
+      query: (userId) => `api/journal-entries/user/${userId}`,
       providesTags: ['JournalEntry'],
     }),
     getJournalEntry: builder.query({
@@ -86,14 +82,7 @@ export const cdtApi = createApi({
       query: (data) => ({
         url: 'api/journal-entries',
         method: 'POST',
-        body: {
-          // CHANGED: was 'body: data' — BE requires these fields + user id
-          createdAt: data.createdAt, // ADDED: "YYYY-MM-DD", required (nullable=false)
-          title: data.title || '', // ADDED: optional title
-          content: data.content, // ADDED: required (nullable=false)
-          type: data.type || 'BLANK', // ADDED: EntryType enum — 'BLANK' or 'PROMPT_BASED'
-          user: { id: 1 }, // ADDED: hardcoded test user
-        },
+        body: data,
       }),
       invalidatesTags: ['JournalEntry'],
     }),
@@ -113,22 +102,49 @@ export const cdtApi = createApi({
       invalidatesTags: ['JournalEntry'],
     }),
 
-    // --- Resources ---
-    getResources: builder.query({
-      query: () => 'api/resources',
-      providesTags: ['Resource'],
+    // --- Emotions (feeling tags) ---
+    getEmotions: builder.query({
+      query: () => 'api/emotions',
+      providesTags: ['Emotion'],
     }),
-    getResource: builder.query({
-      query: (id) => `api/resources/${id}`,
-      providesTags: ['Resource'],
+
+    // --- Mood Factors (influencing factors) ---
+    getMoodFactors: builder.query({
+      query: () => 'api/mood-factors',
+      providesTags: ['MoodFactor'],
+    }),
+    // --- Habits ---
+    getHabits: builder.query({
+      query: (userId) => `api/habits/user/${userId}`,
+      providesTags: ['Habit'],
+    }),
+    createHabit: builder.mutation({
+      query: ({ userId, data }) => ({
+        url: `api/habits/user/${userId}`,
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['Habit'],
+    }),
+    getHabitToday: builder.query({
+      query: (habitId) => `api/habits/${habitId}/logs/today`,
+      providesTags: (result, error, habitId) => [{ type: 'HabitLog', id: habitId }],
+    }),
+    toggleHabitToday: builder.mutation({
+      query: ({ habitId, completed }) => ({
+        url: `api/habits/${habitId}/logs/today?completed=${completed}`,
+        method: 'POST',
+      }),
+      invalidatesTags: (result, error, { habitId }) => [{ type: 'HabitLog', id: habitId }],
     }),
   }),
 });
 
 export const {
-  useGetUserInfoQuery,
+  useGetUserByEmailQuery,
   useUpdateUserMutation,
   useGetMoodEntriesQuery,
+  useGetMoodEntriesByMonthQuery,
   useCreateMoodEntryMutation,
   useDeleteMoodEntryMutation,
   useGetJournalEntriesQuery,
@@ -136,6 +152,10 @@ export const {
   useCreateJournalEntryMutation,
   useUpdateJournalEntryMutation,
   useDeleteJournalEntryMutation,
-  useGetResourcesQuery,
-  useGetResourceQuery,
+  useGetEmotionsQuery,
+  useGetMoodFactorsQuery,
+  useGetHabitsQuery,
+  useCreateHabitMutation,
+  useGetHabitTodayQuery,
+  useToggleHabitTodayMutation,
 } = cdtApi;

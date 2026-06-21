@@ -20,11 +20,11 @@ export const validatePassword = (password) => {
 
 // Mood helpers
 export const MOOD_LEVELS = [
-  { level: 1, label: 'Very Pleasant', emoji: '😄', hsl: 'hsl(265, 70%, 70%)', color: '#9b72d4' },
-  { level: 2, label: 'Pleasant',      emoji: '🙂', hsl: 'hsl(210, 75%, 68%)', color: '#5ba8e8' },
-  { level: 3, label: 'Neutral',       emoji: '😐', hsl: 'hsl(145, 55%, 62%)', color: '#5bc47e' },
-  { level: 4, label: 'Unpleasant',    emoji: '😕', hsl: 'hsl(45, 90%, 65%)',  color: '#f5c842' },
-  { level: 5, label: 'Very Unpleasant', emoji: '😔', hsl: 'hsl(22, 90%, 65%)', color: '#f5873a' },
+  { level: 1, label: 'Very Unpleasant', emoji: '😔', hsl: 'hsl(265, 70%, 70%)', color: '#9b72d4' },
+  { level: 2, label: 'Unpleasant',      emoji: '😕', hsl: 'hsl(210, 75%, 68%)', color: '#5ba8e8' },
+  { level: 3, label: 'Neutral',         emoji: '😐', hsl: 'hsl(145, 55%, 62%)', color: '#5bc47e' },
+  { level: 4, label: 'Pleasant',        emoji: '🙂', hsl: 'hsl(45, 90%, 65%)',  color: '#f5c842' },
+  { level: 5, label: 'Very Pleasant',   emoji: '😄', hsl: 'hsl(22, 90%, 65%)',  color: '#f5873a' },
 ];
 
 export const moodColor = (level) => MOOD_LEVELS.find(m => m.level === level)?.color || '#9b9b9b';
