@@ -1,29 +1,155 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Animated } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { Swipeable } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
-import { MOOD_LEVELS, moodColor, moodLabel, showErrorToast, isoDate } from '@/utils';
+import { MOOD_LEVELS, moodColor, moodLabel, moodEmoji, showErrorToast, showSuccessToast, isoDate } from '@/utils';
 import { useAppSelector } from '@/store/store';
 import {
   useGetMoodEntriesByMonthQuery,
   useCreateMoodEntryMutation,
-  useGetEmotionsQuery,
+  useDeleteMoodEntryMutation,
+  useGetEmotionsByCategoryQuery,
   useGetMoodFactorsQuery,
 } from '@/api/api';
 
-// Maps the 5 frontend mood levels to a backend moodValue (1-10)
-const LEVEL_TO_VALUE = { 1: 10, 2: 8, 3: 6, 4: 4, 5: 2 };
+const moodValueToLevel = (v) => v;
 
-// Converts a backend moodValue (1-10) back to a frontend level (1-5) for display
-const moodValueToLevel = (v) => {
-  if (v >= 9) return 1;
-  if (v >= 7) return 2;
-  if (v >= 5) return 3;
-  if (v >= 3) return 4;
-  return 5;
+const LEVEL_TO_CATEGORY = {
+  1: 'VERY_UNPLEASANT',
+  2: 'UNPLEASANT',
+  3: 'NEUTRAL',
+  4: 'PLEASANT',
+  5: 'VERY_PLEASANT',
+};
+
+// NEW: which "side" a mood level falls on, used to decide split-square vs quadrant-square
+const sideOf = (level) => {
+  if (level <= 2) return 'unpleasant'; // VERY_UNPLEASANT + UNPLEASANT
+  if (level >= 4) return 'pleasant';   // PLEASANT + VERY_PLEASANT
+  return 'neutral';
+};
+
+const dayHeader = (iso) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.toLocaleDateString('default', { weekday: 'long', month: 'long', day: 'numeric' });
+};
+
+// NEW: renders a day's calendar cell — solid, split (2 colors), or quadrant (up to 4 colors)
+// depending on how varied that day's logged mood levels are.
+const DayMoodCell = ({ day, levels }) => {
+  if (!levels || levels.length === 0) {
+    return (
+      <View style={[styles.calDay, { backgroundColor: theme.colors.surface.three, opacity: 0.4 }]}>
+        <Text style={[styles.calDayText, { color: theme.colors.text.secondary }]}>{day}</Text>
+      </View>
+    );
+  }
+
+  const uniqueLevels = [...new Set(levels)];
+
+  // Single mood level logged that day → solid color, same as before
+  if (uniqueLevels.length === 1) {
+    return (
+      <View style={[styles.calDay, { backgroundColor: moodColor(uniqueLevels[0]) }]}>
+        <Text style={[styles.calDayText, { color: '#fff' }]}>{day}</Text>
+      </View>
+    );
+  }
+
+  const sides = new Set(uniqueLevels.map(sideOf));
+  const isSingleSide = sides.size === 1 && uniqueLevels.length <= 2; // both entries on the same side, only 2 of them
+
+  // Same-side day (e.g. only Pleasant + Very Pleasant, or only Unpleasant + Very Unpleasant)
+  // → split square, half one color half the other
+  if (isSingleSide) {
+    const [a, b] = uniqueLevels.sort((x, y) => x - y);
+    return (
+      <View style={styles.calDay}>
+        <View style={[StyleSheet.absoluteFill, { flexDirection: 'row', borderRadius: 6, overflow: 'hidden' }]}>
+          <View style={{ flex: 1, backgroundColor: moodColor(a) }} />
+          <View style={{ flex: 1, backgroundColor: moodColor(b) }} />
+        </View>
+        <Text style={[styles.calDayText, { color: '#fff' }]}>{day}</Text>
+      </View>
+    );
+  }
+
+  // Genuinely mixed day (spans both sides, or 3+ distinct levels) → quadrant square, up to 4 colors
+  const quadColors = uniqueLevels.slice(0, 4).map(moodColor);
+  while (quadColors.length < 4) quadColors.push(quadColors[quadColors.length - 1]); // pad by repeating last color
+
+  return (
+    <View style={styles.calDay}>
+      <View style={[StyleSheet.absoluteFill, { borderRadius: 6, overflow: 'hidden' }]}>
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          <View style={{ flex: 1, backgroundColor: quadColors[0] }} />
+          <View style={{ flex: 1, backgroundColor: quadColors[1] }} />
+        </View>
+        <View style={{ flex: 1, flexDirection: 'row' }}>
+          <View style={{ flex: 1, backgroundColor: quadColors[2] }} />
+          <View style={{ flex: 1, backgroundColor: quadColors[3] }} />
+        </View>
+      </View>
+      <Text style={[styles.calDayText, { color: '#fff' }]}>{day}</Text>
+    </View>
+  );
+};
+
+const MoodEntryRow = ({ entry, onRequestDelete }) => {
+  const swipeRef = useRef(null);
+  const level = moodValueToLevel(entry.moodValue);
+
+  const renderRightActions = (progress, dragX) => {
+    const scale = dragX.interpolate({
+      inputRange: [-80, 0],
+      outputRange: [1, 0.6],
+      extrapolate: 'clamp',
+    });
+    return (
+      <TouchableOpacity
+        style={styles.deleteAction}
+        activeOpacity={0.8}
+        onPress={() => {
+          swipeRef.current?.close();
+          onRequestDelete(entry);
+        }}
+      >
+        <Animated.View style={{ transform: [{ scale }], alignItems: 'center' }}>
+          <MaterialIcons name="delete-outline" size={22} color="#fff" />
+          <Text style={styles.deleteActionText}>Delete</Text>
+        </Animated.View>
+      </TouchableOpacity>
+    );
+  };
+
+  const emotions = entry.selectedEmotions ? [...entry.selectedEmotions] : [];
+  const factors = entry.selectedFactors ? [...entry.selectedFactors] : [];
+
+  return (
+    <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
+      <View style={styles.entryCard}>
+        <View style={[styles.entryEmojiCircle, { backgroundColor: moodColor(level) }]}>
+          <Text style={styles.entryEmoji}>{moodEmoji(level)}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.entryMoodLabel}>{moodLabel(level)}</Text>
+          {(emotions.length > 0 || factors.length > 0) && (
+            <Text style={styles.entryMeta} numberOfLines={1}>
+              {[...emotions.map((e) => e.name), ...factors.map((f) => f.name)].join(' · ')}
+            </Text>
+          )}
+          {!!entry.note && <Text style={styles.entryNote}>{entry.note}</Text>}
+        </View>
+      </View>
+    </Swipeable>
+  );
 };
 
 const Mood = () => {
+  const insets = useSafeAreaInsets();
   const userId = useAppSelector((state) => state.userState.userId);
 
   const [tab, setTab] = useState('track');
@@ -31,13 +157,18 @@ const Mood = () => {
   const [mood, setMood] = useState(null);
   const [feeling, setFeeling] = useState(null);
   const [factor, setFactor] = useState(null);
+  const [note, setNote] = useState('');
   const [done, setDone] = useState(false);
   const [month, setMonth] = useState(new Date());
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   const year = month.getFullYear();
   const monthNum = month.getMonth() + 1;
 
-  const { data: emotions = [], isLoading: emotionsLoading } = useGetEmotionsQuery();
+  const { data: emotions = [], isLoading: emotionsLoading } = useGetEmotionsByCategoryQuery(
+    LEVEL_TO_CATEGORY[mood],
+    { skip: !mood },
+  );
   const { data: moodFactors = [], isLoading: factorsLoading } = useGetMoodFactorsQuery();
   const {
     data: monthEntries = [],
@@ -45,12 +176,13 @@ const Mood = () => {
     refetch: refetchEntries,
   } = useGetMoodEntriesByMonthQuery({ userId, year, month: monthNum }, { skip: !userId });
   const [createMoodEntry, { isLoading: saving }] = useCreateMoodEntryMutation();
+  const [deleteMoodEntry, { isLoading: deleting }] = useDeleteMoodEntryMutation();
 
   useEffect(() => {
     if (userId) refetchEntries();
   }, [month, userId]);
 
-  const reset = () => { setStep(1); setMood(null); setFeeling(null); setFactor(null); setDone(false); };
+  const reset = () => { setStep(1); setMood(null); setFeeling(null); setFactor(null); setNote(''); setDone(false); };
 
   const next = async () => {
     if (step < 3) {
@@ -66,8 +198,8 @@ const Mood = () => {
     try {
       await createMoodEntry({
         date: isoDate(new Date()),
-        moodValue: LEVEL_TO_VALUE[mood],
-        note: '',
+        moodValue: mood,
+        note: note.trim(),
         user: { id: userId },
         selectedEmotions: feeling ? [{ id: feeling.id }] : [],
         selectedFactors: factor ? [{ id: factor.id }] : [],
@@ -75,6 +207,18 @@ const Mood = () => {
       setDone(true);
     } catch (err) {
       showErrorToast('Could not save your mood entry. Please try again.');
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
+    try {
+      await deleteMoodEntry(pendingDelete.id).unwrap();
+      showSuccessToast('Mood entry deleted');
+    } catch (err) {
+      showErrorToast('Could not delete the mood entry. Please try again.');
+    } finally {
+      setPendingDelete(null);
     }
   };
 
@@ -90,16 +234,25 @@ const Mood = () => {
     (step === 2 && feeling !== null) ||
     (step === 3 && factor !== null);
 
-  const entriesByDate = {};
+  // CHANGED: was entriesByDate[e.date] = e.moodValue (single value, last write wins);
+  // now collects ALL mood levels logged on each date, so multi-entry days can render correctly
+  const levelsByDate = {}; // NEW
   monthEntries.forEach((e) => {
-    entriesByDate[e.date] = e.moodValue;
+    const lvl = moodValueToLevel(e.moodValue);
+    (levelsByDate[e.date] = levelsByDate[e.date] || []).push(lvl); // NEW
   });
 
+  const groupedByDay = Object.values(
+    [...monthEntries].reduce((acc, e) => {
+      (acc[e.date] = acc[e.date] || { date: e.date, items: [] }).items.push(e);
+      return acc;
+    }, {})
+  ).sort((a, b) => (a.date < b.date ? 1 : -1));
+
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: insets.top + theme.spacing.md }]} showsVerticalScrollIndicator={false}>
       <Text style={styles.pageTitle}>Mood</Text>
 
-      {/* Tab Switch */}
       <View style={styles.tabRow}>
         {(['track', 'insights']).map((t) => (
           <TouchableOpacity key={t} onPress={() => setTab(t)} style={[styles.tabBtn, tab === t && styles.tabBtnActive]}>
@@ -127,7 +280,6 @@ const Mood = () => {
             </View>
           ) : (
             <View style={styles.card}>
-              {/* Progress bar */}
               <View style={styles.progressRow}>
                 {[1, 2, 3].map((s) => (
                   <View key={s} style={[styles.progressBar, s <= step && { backgroundColor: theme.colors.primary }]} />
@@ -140,7 +292,7 @@ const Mood = () => {
                   <Text style={styles.stepSub}>Pick a mood</Text>
                   <View style={styles.moodRow}>
                     {MOOD_LEVELS.map((m) => (
-                      <TouchableOpacity key={m.level} onPress={() => setMood(m.level)} style={styles.moodBtn}>
+                      <TouchableOpacity key={m.level} onPress={() => { setMood(m.level); setFeeling(null); }} style={styles.moodBtn}>
                         <View style={[styles.moodCircle, { backgroundColor: m.color }, mood === m.level && styles.moodCircleActive]}>
                           <Text style={styles.moodEmoji}>{m.emoji}</Text>
                         </View>
@@ -186,6 +338,17 @@ const Mood = () => {
                       ))}
                     </View>
                   )}
+
+                  <Text style={[styles.stepSub, { marginTop: theme.spacing.md }]}>Add a note (optional)</Text>
+                  <TextInput
+                    value={note}
+                    onChangeText={setNote}
+                    placeholder="Write anything you'd like to remember about today…"
+                    placeholderTextColor={theme.colors.text.secondary}
+                    multiline
+                    textAlignVertical="top"
+                    style={styles.noteInput}
+                  />
                 </View>
               )}
 
@@ -211,50 +374,89 @@ const Mood = () => {
       )}
 
       {tab === 'insights' && (
-        <View style={styles.card}>
-          <View style={styles.calHeader}>
-            <TouchableOpacity onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>
-              <MaterialIcons name="chevron-left" size={22} color={theme.colors.text.primary} />
-            </TouchableOpacity>
-            <Text style={styles.calTitle}>{monthName}</Text>
-            <TouchableOpacity onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>
-              <MaterialIcons name="chevron-right" size={22} color={theme.colors.text.primary} />
-            </TouchableOpacity>
+        <>
+          <View style={styles.card}>
+            <View style={styles.calHeader}>
+              <TouchableOpacity onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>
+                <MaterialIcons name="chevron-left" size={22} color={theme.colors.text.primary} />
+              </TouchableOpacity>
+              <Text style={styles.calTitle}>{monthName}</Text>
+              <TouchableOpacity onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))}>
+                <MaterialIcons name="chevron-right" size={22} color={theme.colors.text.primary} />
+              </TouchableOpacity>
+            </View>
+
+            {entriesLoading ? (
+              <ActivityIndicator color={theme.colors.primary} style={{ marginVertical: theme.spacing.lg }} />
+            ) : (
+              <View style={styles.calGrid}>
+                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                  <Text key={i} style={styles.calWeekDay}>{d}</Text>
+                ))}
+                {Array.from({ length: firstDow }).map((_, i) => <View key={`e${i}`} style={styles.calCell} />)}
+                {Array.from({ length: daysIn }).map((_, i) => {
+                  const day = i + 1;
+                  return (
+                    // CHANGED: was a single solid-color View; now delegates to DayMoodCell
+                    // which renders solid / split / quadrant depending on the day's entries
+                    <View key={day} style={styles.calCell}>
+                      <DayMoodCell day={day} levels={levelsByDate[ds(day)]} />
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+
+            <View style={styles.legend}>
+              {MOOD_LEVELS.map((m) => (
+                <View key={m.level} style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: m.color }]} />
+                  <Text style={styles.legendText}>{m.label}</Text>
+                </View>
+              ))}
+            </View>
           </View>
 
+          <Text style={styles.entriesHeading}>Entries this month</Text>
           {entriesLoading ? (
             <ActivityIndicator color={theme.colors.primary} style={{ marginVertical: theme.spacing.lg }} />
-          ) : (
-            <View style={styles.calGrid}>
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
-                <Text key={i} style={styles.calWeekDay}>{d}</Text>
-              ))}
-              {Array.from({ length: firstDow }).map((_, i) => <View key={`e${i}`} style={styles.calCell} />)}
-              {Array.from({ length: daysIn }).map((_, i) => {
-                const day = i + 1;
-                const level = entriesByDate[ds(day)] ? moodValueToLevel(entriesByDate[ds(day)]) : undefined;
-                return (
-                  <View key={day} style={styles.calCell}>
-                    <View style={[styles.calDay, { backgroundColor: level ? moodColor(level) : theme.colors.surface.three, opacity: level ? 1 : 0.4 }]}>
-                      <Text style={[styles.calDayText, { color: level ? '#fff' : theme.colors.text.secondary }]}>{day}</Text>
-                    </View>
-                  </View>
-                );
-              })}
+          ) : groupedByDay.length === 0 ? (
+            <View style={styles.emptyEntries}>
+              <MaterialIcons name="event-note" size={28} color={theme.colors.text.secondary} />
+              <Text style={styles.emptyEntriesText}>No mood entries logged this month yet.</Text>
             </View>
-          )}
-
-          {/* Legend */}
-          <View style={styles.legend}>
-            {MOOD_LEVELS.map((m) => (
-              <View key={m.level} style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: m.color }]} />
-                <Text style={styles.legendText}>{m.label}</Text>
+          ) : (
+            groupedByDay.map((group) => (
+              <View key={group.date} style={styles.daySection}>
+                <Text style={styles.dayLabel}>{dayHeader(group.date)}</Text>
+                {group.items.map((entry) => (
+                  <MoodEntryRow key={entry.id} entry={entry} onRequestDelete={setPendingDelete} />
+                ))}
               </View>
-            ))}
+            ))
+          )}
+        </>
+      )}
+
+      <Modal visible={!!pendingDelete} transparent animationType="fade" onRequestClose={() => setPendingDelete(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalIcon}>
+              <MaterialIcons name="delete-outline" size={26} color="#e5484d" />
+            </View>
+            <Text style={styles.modalTitle}>Delete mood entry?</Text>
+            <Text style={styles.modalSub}>This will permanently remove this entry. This action can't be undone.</Text>
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnCancel]} onPress={() => setPendingDelete(null)} disabled={deleting}>
+                <Text style={styles.modalBtnCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalBtn, styles.modalBtnDelete]} onPress={confirmDelete} disabled={deleting}>
+                {deleting ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalBtnDeleteText}>Delete</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
-      )}
+      </Modal>
     </ScrollView>
   );
 };
@@ -287,14 +489,12 @@ const styles = StyleSheet.create({
   moodCircle: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   moodCircleActive: { borderWidth: 3, borderColor: 'rgba(0,0,0,0.2)', transform: [{ scale: 1.1 }] },
   moodEmoji: { fontSize: 24 },
+  moodLabelBox: { width: 62, height: 28, alignItems: 'center', justifyContent: 'center' },
   moodEmojiLabel: {
     fontSize: 11,
     fontWeight: '600',
     color: theme.colors.text.secondary,
     textAlign: 'center',
-    width: 62,
-    height: 28,
-    textAlignVertical: 'center',
   },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.colors.surface.two },
@@ -312,12 +512,53 @@ const styles = StyleSheet.create({
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calWeekDay: { width: '14.28%', textAlign: 'center', fontSize: 10, fontWeight: '700', color: theme.colors.text.secondary, paddingVertical: 4 },
   calCell: { width: '14.28%', aspectRatio: 1, padding: 1 },
-  calDay: { flex: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  calDay: { flex: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }, // CHANGED: added overflow: 'hidden' so split/quadrant fills respect the border radius
   calDayText: { fontSize: 11, fontWeight: '700' },
   legend: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginTop: theme.spacing.sm },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 10, height: 10, borderRadius: 3 },
   legendText: { fontSize: 9, fontWeight: '600', color: theme.colors.text.secondary },
+  noteInput: {
+    minHeight: 90,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surface.two,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    fontSize: theme.typography.fontSize.paragraph.sm,
+    color: theme.colors.text.primary,
+    marginTop: theme.spacing.xs,
+  },
+  entriesHeading: { fontSize: 14, fontWeight: '800', color: theme.colors.text.primary, marginBottom: theme.spacing.sm, marginTop: theme.spacing.xs },
+  emptyEntries: { alignItems: 'center', gap: 8, paddingVertical: theme.spacing.lg },
+  emptyEntriesText: { fontSize: 12, color: theme.colors.text.secondary, fontWeight: '600' },
+  daySection: { marginBottom: theme.spacing.md },
+  dayLabel: { fontSize: 11, fontWeight: '700', color: theme.colors.text.secondary, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
+  entryCard: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm,
+    backgroundColor: theme.colors.surface.one, borderRadius: 16, padding: theme.spacing.md, marginBottom: 8,
+    shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 1,
+  },
+  entryEmojiCircle: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  entryEmoji: { fontSize: 20 },
+  entryMoodLabel: { fontSize: 13, fontWeight: '700', color: theme.colors.text.primary },
+  entryMeta: { fontSize: 11, color: theme.colors.text.secondary, marginTop: 2 },
+  entryNote: { fontSize: 12, color: theme.colors.text.primary, marginTop: 4, fontStyle: 'italic' },
+  deleteAction: {
+    backgroundColor: '#e5484d', justifyContent: 'center', alignItems: 'center',
+    width: 88, borderRadius: 16, marginBottom: 8,
+  },
+  deleteActionText: { color: '#fff', fontSize: 11, fontWeight: '700', marginTop: 2 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: theme.spacing.lg },
+  modalCard: { width: '100%', maxWidth: 360, backgroundColor: theme.colors.surface.one, borderRadius: 24, padding: theme.spacing.lg, alignItems: 'center' },
+  modalIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(229,72,77,0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: theme.spacing.sm },
+  modalTitle: { fontSize: 17, fontWeight: '800', color: theme.colors.text.primary, marginBottom: 6, textAlign: 'center' },
+  modalSub: { fontSize: 12, color: theme.colors.text.secondary, textAlign: 'center', marginBottom: theme.spacing.md, lineHeight: 18 },
+  modalBtnRow: { flexDirection: 'row', gap: theme.spacing.sm, width: '100%' },
+  modalBtn: { flex: 1, borderRadius: 16, paddingVertical: theme.spacing.md, alignItems: 'center', justifyContent: 'center' },
+  modalBtnCancel: { backgroundColor: theme.colors.surface.two },
+  modalBtnCancelText: { fontWeight: '700', color: theme.colors.text.primary, fontSize: 14 },
+  modalBtnDelete: { backgroundColor: '#e5484d' },
+  modalBtnDeleteText: { fontWeight: '700', color: '#fff', fontSize: 14 },
 });
 
 export default Mood;
