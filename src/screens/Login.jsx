@@ -28,7 +28,7 @@ const Login = ({ navigation }) => {
       dispatch(setSignedIn(true));
     } catch (err) {
       let errorMsg = 'Login failed. Please check your credentials.';
-      if (err?.data?.message) errorMsg = err.data.message;
+      if (err?.data?.error) errorMsg = err.data.error;
       showErrorToast(errorMsg);
     }
   };

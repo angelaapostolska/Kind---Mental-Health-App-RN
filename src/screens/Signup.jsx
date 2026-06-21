@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Keyboard, TouchableWithoutFeedback, ScrollView } from 'react-native';
+import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useRegisterMutation } from '@/api/authApi';
 import { ScreenTitle, ThemeInput, ThemePasswordInput, ThemeButton } from '@/components';
 import NavigationScreens from '@/config/NavigationScreens';
@@ -8,29 +9,55 @@ import { setSignedIn } from '@/store/commonSlices/userSlice';
 import { useAppDispatch } from '@/store/store';
 import { showErrorToast } from '@/utils';
 
+const PASSWORD_RULES = [
+  { key: 'minLength', label: 'At least 8 characters', test: (p) => p.length >= 8 },
+  { key: 'hasUppercase', label: 'One uppercase letter (A-Z)', test: (p) => /[A-Z]/.test(p) },
+  { key: 'hasLowercase', label: 'One lowercase letter (a-z)', test: (p) => /[a-z]/.test(p) },
+  { key: 'hasNumber', label: 'One number (0-9)', test: (p) => /[0-9]/.test(p) },
+];
+
 const Signup = ({ navigation }) => {
   const dispatch = useAppDispatch();
   const [register, { isLoading }] = useRegisterMutation();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [emailError, setEmailError] = useState('');
+  const [passwordTouched, setPasswordTouched] = useState(false);
+
+  const ruleResults = PASSWORD_RULES.map((r) => ({ ...r, passed: r.test(password) }));
+  const allRulesPassed = ruleResults.every((r) => r.passed);
+
+  const handleEmailChange = (text) => {
+    setEmail(text);
+    if (emailError) setEmailError('');
+  };
+
+  const handlePasswordChange = (text) => {
+    setPassword(text);
+    if (!passwordTouched && text.length > 0) setPasswordTouched(true);
+  };
 
   const handleSignupPress = async () => {
     if (!name || !email || !password) {
       showErrorToast('Please fill in all fields');
       return;
     }
-    if (password.length < 8) {
-      showErrorToast('Password must be at least 8 characters');
+    if (!allRulesPassed) {
+      setPasswordTouched(true);
+      showErrorToast('Password does not meet the requirements');
       return;
     }
     try {
       await register({ name, email, password }).unwrap();
       dispatch(setSignedIn(true));
     } catch (err) {
-      let errorMsg = 'Registration failed. Please try again.';
-      if (err?.data?.message) errorMsg = err.data.message;
-      showErrorToast(errorMsg);
+      if (err?.status === 409) {
+        setEmailError('This email is already taken');
+      } else {
+        const errorMsg = err?.data?.error ?? 'Registration failed. Please try again.';
+        showErrorToast(errorMsg);
+      }
     }
   };
 
@@ -54,16 +81,39 @@ const Signup = ({ navigation }) => {
                 />
                 <ThemeInput
                   placeholder="Email"
-                  onChangeText={setEmail}
+                  onChangeText={handleEmailChange}
                   value={email}
                   autoCapitalize="none"
                   keyboardType="email-address"
+                  isValid={!emailError}
+                  errorMessage={emailError}
                 />
-                <ThemePasswordInput
-                  placeholder="Password"
-                  onChangeText={setPassword}
-                  value={password}
-                />
+                <View>
+                  <ThemePasswordInput
+                    placeholder="Password"
+                    onChangeText={handlePasswordChange}
+                    value={password}
+                    isValid={!passwordTouched || allRulesPassed}
+                    isSuccess={passwordTouched && allRulesPassed}
+                  />
+                  {passwordTouched && (
+                    <View style={styles.rulesContainer}>
+                      <Text style={styles.rulesTitle}>Password must contain:</Text>
+                      {ruleResults.map((r) => (
+                        <View key={r.key} style={styles.ruleRow}>
+                          <MaterialIcons
+                            name={r.passed ? 'check-circle' : 'radio-button-unchecked'}
+                            size={14}
+                            color={r.passed ? '#27ae60' : theme.colors.text.secondary}
+                          />
+                          <Text style={[styles.ruleText, r.passed && styles.ruleTextPassed]}>
+                            {r.label}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
               </View>
 
               <ThemeButton title="Sign Up" onPress={handleSignupPress} loading={isLoading} />
@@ -118,6 +168,30 @@ const styles = StyleSheet.create({
   inputContainer: {
     gap: theme.spacing.sm,
     marginBottom: theme.spacing.lg,
+  },
+  rulesContainer: {
+    marginTop: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.xs,
+    gap: 4,
+  },
+  rulesTitle: {
+    fontSize: theme.typography.fontSize.label.xs,
+    fontWeight: theme.typography.fontVariants.secondary.semibold,
+    color: theme.colors.text.secondary,
+    marginBottom: 2,
+  },
+  ruleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ruleText: {
+    fontSize: theme.typography.fontSize.label.xs,
+    color: theme.colors.text.secondary,
+  },
+  ruleTextPassed: {
+    color: '#27ae60',
+    fontWeight: theme.typography.fontVariants.secondary.semibold,
   },
   loginContainer: {
     marginTop: theme.spacing.md,

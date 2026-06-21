@@ -1,6 +1,8 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import * as SecureStore from 'expo-secure-store';
 import { env } from '@/config/environments';
+import { setUserName } from '@/store/commonSlices/appSlice';
+import { setUserId, setUserEmail } from '@/store/commonSlices/userSlice';
 
 export const authApi = createApi({
   reducerPath: 'authApi',
@@ -18,10 +20,17 @@ export const authApi = createApi({
         method: 'POST',
         body: { email, password },
       }),
-      async onQueryStarted(arg, { queryFulfilled }) {
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
           await SecureStore.setItemAsync('access_token', data.token);
+          dispatch(setUserName(data.name));
+          dispatch(setUserEmail(data.email));
+          const res = await fetch(`${env.base_api_url}api/users/email/${data.email}`, {
+            headers: { Authorization: `Bearer ${data.token}` },
+          });
+          const user = await res.json();
+          dispatch(setUserId(user.id));
         } catch (err) {
           console.warn('Login failed', err);
         }
@@ -33,10 +42,17 @@ export const authApi = createApi({
         method: 'POST',
         body: { name, email, password },
       }),
-      async onQueryStarted(arg, { queryFulfilled }) {
+      async onQueryStarted(arg, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
           await SecureStore.setItemAsync('access_token', data.token);
+          dispatch(setUserName(data.name));
+          dispatch(setUserEmail(data.email));
+          const res = await fetch(`${env.base_api_url}api/users/email/${data.email}`, {
+            headers: { Authorization: `Bearer ${data.token}` },
+          });
+          const user = await res.json();
+          dispatch(setUserId(user.id));
         } catch (err) {
           console.warn('Register failed', err);
         }

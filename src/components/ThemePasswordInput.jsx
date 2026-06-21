@@ -5,12 +5,12 @@ import PropTypes from 'prop-types';
 import { theme } from '@/constants/theme';
 
 const ThemePasswordInput = forwardRef(
-  ({ value, onChangeText, placeholder, containerStyle, inputStyle, disabled, isValid = true, errorMessage, ...props }, ref) => {
+  ({ value, onChangeText, placeholder, containerStyle, inputStyle, disabled, isValid = true, isSuccess = false, errorMessage, ...props }, ref) => {
     const [isVisible, setIsVisible] = useState(false);
 
     return (
       <View>
-        <View style={[styles.container, containerStyle, !isValid && styles.containerError]}>
+        <View style={[styles.container, containerStyle, !isValid && styles.containerError, isSuccess && styles.containerSuccess]}>
           {!value ? <Text style={styles.placeholder}>{placeholder}</Text> : null}
           <TextInput
             ref={ref}
@@ -40,6 +40,7 @@ ThemePasswordInput.propTypes = {
   inputStyle: PropTypes.oneOfType([PropTypes.object, PropTypes.array]),
   disabled: PropTypes.bool,
   isValid: PropTypes.bool,
+  isSuccess: PropTypes.bool,
   errorMessage: PropTypes.string,
 };
 
@@ -59,6 +60,10 @@ const styles = StyleSheet.create({
   containerError: {
     borderBottomWidth: 3,
     borderBottomColor: theme.colors.text.error,
+  },
+  containerSuccess: {
+    borderBottomWidth: 3,
+    borderBottomColor: '#27ae60',
   },
   input: {
     flex: 1,
