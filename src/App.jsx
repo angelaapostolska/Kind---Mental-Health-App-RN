@@ -1,12 +1,11 @@
-import React from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, ActivityIndicator, StyleSheet, LogBox } from 'react-native';
 import { registerRootComponent } from 'expo';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import { Provider } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { toastConfig } from '@/config/themedToast';
 import Navigation from '@/navigation';
 import store, { persistor } from '@/store/store';
