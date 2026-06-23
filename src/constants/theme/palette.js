@@ -25,7 +25,7 @@ export const palette = {
 
   surface: {
     one: '#fafcff',
-    two: '#f5f3ff',
+    two: '#F4EBFF',
     three: '#ede9fe',
     four: '#ddd6fe',
     action: '#6C5CE7',
