@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as SecureStore from 'expo-secure-store';
@@ -7,6 +7,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { setSignedIn } from '@/store/commonSlices/userSlice';
+// CHANGED: daily affirmation notification settings
+import {
+  loadAffirmationSettings,
+  applyAffirmationSettings,
+  DEFAULT_SETTINGS,
+} from '@/utils/notifications';
+
+// CHANGED: 24h -> "9:00 AM"
+const formatTime = (h, m) => {
+  const ampm = h < 12 ? 'AM' : 'PM';
+  const hh = h % 12 === 0 ? 12 : h % 12;
+  return `${hh}:${String(m).padStart(2, '0')} ${ampm}`;
+};
 
 const SETTINGS = [
   { icon: 'notifications', label: 'Notifications', desc: 'Reminders & alerts' },
@@ -21,6 +34,28 @@ const Profile = () => {
   const appState = useAppSelector((s) => s.appState);
   const userName = appState?.userName || 'Friend';
   const initials = userName.slice(0, 2).toUpperCase();
+
+  // CHANGED: daily affirmation settings (enabled + time of day)
+  const [aff, setAff] = useState(DEFAULT_SETTINGS);
+  useEffect(() => {
+    loadAffirmationSettings().then(setAff);
+  }, []);
+
+  const applySettings = async (next) => {
+    setAff(next); // optimistic
+    const res = await applyAffirmationSettings(next);
+    setAff(res.settings);
+    if (res.permissionDenied) {
+      Alert.alert(
+        'Notifications are off',
+        'Enable notifications for Kind in your device settings to receive daily affirmations.',
+      );
+    }
+  };
+
+  const toggleAff = () => applySettings({ ...aff, enabled: !aff.enabled });
+  const changeHour = (d) => applySettings({ ...aff, hour: (aff.hour + d + 24) % 24 });
+  const changeMinute = (d) => applySettings({ ...aff, minute: (aff.minute + d + 60) % 60 });
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -79,6 +114,59 @@ const Profile = () => {
       </View>
 
       <Text style={styles.sectionTitle}>Settings</Text>
+
+      {/* CHANGED: Daily Affirmation — a random affirmation pushed once a day at a time you pick */}
+      <View style={styles.card}>
+        <View style={styles.affHeaderRow}>
+          <View style={styles.settingIcon}>
+            <MaterialCommunityIcons name="white-balance-sunny" size={18} color={theme.colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.settingLabel}>Daily Affirmation</Text>
+            <Text style={styles.settingDesc}>A kind note, once a day</Text>
+          </View>
+          <Switch
+            value={aff.enabled}
+            onValueChange={toggleAff}
+            trackColor={{ true: theme.colors.primary, false: theme.colors.border.three }}
+            thumbColor="#fff"
+          />
+        </View>
+
+        {aff.enabled && (
+          <View style={styles.affTimeBlock}>
+            <Text style={styles.affTimeCaption}>Remind me at</Text>
+            <Text style={styles.affTimeValue}>{formatTime(aff.hour, aff.minute)}</Text>
+
+            <View style={styles.affStepperGroup}>
+              <View style={styles.affStepperCol}>
+                <Text style={styles.affStepperLabel}>Hour</Text>
+                <View style={styles.affStepperBtns}>
+                  <TouchableOpacity style={styles.affStepBtn} onPress={() => changeHour(-1)}>
+                    <MaterialIcons name="remove" size={18} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.affStepBtn} onPress={() => changeHour(1)}>
+                    <MaterialIcons name="add" size={18} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.affStepperCol}>
+                <Text style={styles.affStepperLabel}>Minute</Text>
+                <View style={styles.affStepperBtns}>
+                  <TouchableOpacity style={styles.affStepBtn} onPress={() => changeMinute(-5)}>
+                    <MaterialIcons name="remove" size={18} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.affStepBtn} onPress={() => changeMinute(5)}>
+                    <MaterialIcons name="add" size={18} color={theme.colors.primary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+      </View>
+
       <View style={styles.card}>
         {SETTINGS.map((item, i) => (
           <TouchableOpacity
@@ -177,6 +265,29 @@ const styles = StyleSheet.create({
   },
   settingLabel: { fontSize: 14, fontWeight: '700', color: theme.colors.text.primary },
   settingDesc: { fontSize: 11, color: theme.colors.text.secondary },
+  // CHANGED: Daily Affirmation card
+  affHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm },
+  affTimeBlock: {
+    marginTop: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.border.one,
+    alignItems: 'center',
+  },
+  affTimeCaption: { fontSize: 11, color: theme.colors.text.secondary, marginBottom: 2 },
+  affTimeValue: { fontSize: 28, fontWeight: '800', color: theme.colors.primary, marginBottom: theme.spacing.md },
+  affStepperGroup: { flexDirection: 'row', gap: theme.spacing.xl },
+  affStepperCol: { alignItems: 'center', gap: 6 },
+  affStepperLabel: { fontSize: 11, fontWeight: '600', color: theme.colors.text.secondary },
+  affStepperBtns: { flexDirection: 'row', gap: theme.spacing.sm },
+  affStepBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: theme.colors.surface.brandPrimary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
