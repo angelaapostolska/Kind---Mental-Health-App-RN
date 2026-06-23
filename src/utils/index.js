@@ -63,7 +63,26 @@ export const AFFIRMATIONS = [
   "It's okay to take things one step at a time.",
   'You deserve peace and joy today.',
   'Your feelings are valid and important.',
+  // CHANGED: more variety so daily notifications don't repeat too soon
+  'You have survived 100% of your hardest days.',
+  'Rest is productive too. Be gentle with yourself.',
+  'You are allowed to take up space.',
+  'Small progress is still progress.',
+  'You are enough, exactly as you are.',
+  'Your pace is the right pace.',
+  'You are doing better than you think.',
+  'It is brave to keep going.',
+  'You can begin again, anytime.',
+  'Your presence makes a difference.',
+  'Be proud of how far you have come.',
+  'You are not your hardest moments.',
+  'Today, choose one kind thing for yourself.',
+  'You are growing, even when it is quiet.',
 ];
+
+// CHANGED: helper for the daily affirmation notification
+export const getRandomAffirmation = () =>
+  AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)];
 
 export const getGreeting = () => {
   const hour = new Date().getHours();

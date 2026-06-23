@@ -209,7 +209,7 @@ const Journal = () => {
                   <View style={[styles.moodPickerCircle, { backgroundColor: m.color, opacity: mood !== null && mood !== m.level ? 0.35 : 1 }, mood === m.level && styles.moodPickerActive]}>
                     <Text style={{ fontSize: 18 }}>{m.emoji}</Text>
                   </View>
-                  <Text style={styles.moodPickerLabel2}>{m.label.split(' ').pop()}</Text>
+                  <Text style={styles.moodPickerLabel2}>{m.label}</Text>
                 </TouchableOpacity>
               ))}
             </View>
