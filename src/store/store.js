@@ -9,6 +9,9 @@ import rootReducer from './rootReducer';
 const persistConfig = {
   key: 'root',
   storage: AsyncStorage,
+  // RTK Query cache must not be persisted — stale snapshots cause queries to
+  // serve outdated (or empty) data instead of hitting the network on restart.
+  blacklist: [cdtApi.reducerPath, authApi.reducerPath],
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);

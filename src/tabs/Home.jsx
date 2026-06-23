@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
+  TextInput, Modal, Dimensions, ActivityIndicator, Animated, Easing,
   TextInput, Modal, Dimensions, ActivityIndicator, Alert,
   Animated, PanResponder, Pressable,          // CHANGED: for swipe-to-dismiss + backdrop
 } from 'react-native';
+import { Audio } from 'expo-av';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -120,6 +122,39 @@ const habitIconName = (habit) =>
   ICON_BY_IDENTIFIER[habit.iconIdentifier] ||
   ICON_BY_IDENTIFIER[(habit.name || '').toLowerCase()] ||
   'checkbox-marked-circle';
+
+const SOUND_FILES = {
+  Rain: require('../assets/sounds/rain.mp3'),
+  Ocean: require('../assets/sounds/ocean.mp3'),
+  Forest: require('../assets/sounds/forest.mp3'),
+  'White noise': require('../assets/sounds/whitenoise.mp3'),
+};
+
+const SESSION_AURA_COLOR = '#b4a7f5';
+
+const AURA_RINGS = [
+  { size: 300, opacityRange: [0.04, 0.11], scaleRange: [1.0, 1.22] },
+  { size: 262, opacityRange: [0.07, 0.17], scaleRange: [1.0, 1.17] },
+  { size: 224, opacityRange: [0.11, 0.24], scaleRange: [1.0, 1.12] },
+  { size: 188, opacityRange: [0.17, 0.32], scaleRange: [1.0, 1.08] },
+  { size: 154, opacityRange: [0.26, 0.43], scaleRange: [1.0, 1.05] },
+  { size: 122, opacityRange: [0.36, 0.56], scaleRange: [1.0, 1.02] },
+];
+
+const SPARKLE_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315];
+
+const SOUND_ICONS = {
+  Rain: 'weather-rainy',
+  Ocean: 'waves',
+  Forest: 'tree',
+  'White noise': 'music-note-whole',
+};
+
+const formatTime = (seconds) => {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+};
 
 const MEDITATION_TYPES = [
   { name: 'Body Scan',       desc: 'Release tension head to toe' },
@@ -358,7 +393,83 @@ const Home = () => {
   const [medDuration, setMedDuration] = useState(5);
   const [customHabit, setCustomHabit] = useState('');
 
-  const greeting    = getGreeting();
+  const [medSession, setMedSession] = useState(false);
+  const [medTimeLeft, setMedTimeLeft] = useState(0);
+  const [medComplete, setMedComplete] = useState(false);
+  const soundRef = useRef(null);
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const pulseLoopRef = useRef(null);
+  const riseAnim = useRef(new Animated.Value(0)).current;
+  const textFadeAnim = useRef(new Animated.Value(0)).current;
+  const subFadeAnim = useRef(new Animated.Value(0)).current;
+  const sparkleAnim = useRef(new Animated.Value(0)).current;
+
+  const endMedSession = useCallback(async () => {
+    setMedSession(false);
+    if (soundRef.current) {
+      try { await soundRef.current.stopAsync(); await soundRef.current.unloadAsync(); } catch (_) {}
+      soundRef.current = null;
+    }
+    riseAnim.setValue(0);
+    textFadeAnim.setValue(0);
+    subFadeAnim.setValue(0);
+    sparkleAnim.setValue(0);
+    setMedComplete(true);
+  }, [riseAnim, textFadeAnim, subFadeAnim, sparkleAnim]);
+
+  const closeCompletion = useCallback(() => setMedComplete(false), []);
+
+  useEffect(() => {
+    if (!medComplete) return;
+    Animated.spring(riseAnim, { toValue: 1, tension: 42, friction: 7, useNativeDriver: true }).start(() => {
+      Animated.timing(textFadeAnim, { toValue: 1, duration: 750, useNativeDriver: true }).start(() => {
+        Animated.timing(subFadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
+      });
+    });
+    Animated.timing(sparkleAnim, { toValue: 1, duration: 1000, delay: 250, useNativeDriver: true }).start();
+  }, [medComplete, riseAnim, textFadeAnim, subFadeAnim, sparkleAnim]);
+
+  const startMedSession = useCallback(async () => {
+    setMedModal(false);
+    setMedTimeLeft(medDuration * 60);
+    try {
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      const { sound } = await Audio.Sound.createAsync(SOUND_FILES[medSound], { isLooping: true });
+      soundRef.current = sound;
+      await sound.playAsync();
+    } catch (e) {
+      console.warn('Meditation audio error:', e);
+    }
+    setMedSession(true);
+  }, [medDuration, medSound]);
+
+  useEffect(() => {
+    if (!medSession) return;
+    const interval = setInterval(() => setMedTimeLeft((t) => Math.max(0, t - 1)), 1000);
+    return () => clearInterval(interval);
+  }, [medSession]);
+
+  useEffect(() => {
+    if (medSession && medTimeLeft === 0) endMedSession();
+  }, [medTimeLeft, medSession, endMedSession]);
+
+  useEffect(() => {
+    if (!medSession) {
+      if (pulseLoopRef.current) { pulseLoopRef.current.stop(); pulseLoopRef.current = null; }
+      pulseAnim.setValue(0);
+      return;
+    }
+    pulseLoopRef.current = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 3500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 3500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+      ])
+    );
+    pulseLoopRef.current.start();
+    return () => { if (pulseLoopRef.current) { pulseLoopRef.current.stop(); pulseLoopRef.current = null; } };
+  }, [medSession, pulseAnim]);
+
+  const greeting = getGreeting();
   const currentWeek = getCurrentWeek();
   const todayStr    = isoDate(new Date());
   const initials    = userName.slice(0, 1).toUpperCase();   // CHANGED: header avatar bubble
@@ -546,16 +657,45 @@ const Home = () => {
             ))}
           </View>
 
-          {medMode === 'sound' ? (
-            <View>
-              <Text style={styles.sectionLabel}>Pick a sound</Text>
-              <View style={styles.soundGrid}>
-                {['Rain', 'Ocean', 'Forest', 'White noise'].map((s) => (
-                  <TouchableOpacity key={s} onPress={() => setMedSound(s)} style={[styles.soundChip, medSound === s && styles.soundChipActive]}>
-                    <MaterialCommunityIcons name="music" size={14} color={medSound === s ? '#fff' : pastel.textDeep} />
-                    <Text style={[styles.soundChipText, medSound === s && { color: '#fff' }]}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
+      {/* Meditation Modal */}
+      <Modal visible={medModal} animationType="slide" transparent onRequestClose={() => setMedModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Meditation</Text>
+
+            <View style={styles.tabRow}>
+              {(['sound', 'guided']).map((m) => (
+                <TouchableOpacity key={m} onPress={() => setMedMode(m)} style={[styles.tabBtn, medMode === m && styles.tabBtnActive]}>
+                  <Text style={[styles.tabText, medMode === m && styles.tabTextActive]}>
+                    {m === 'sound' ? 'Sound + Timer' : 'Guided'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {medMode === 'sound' ? (
+              <View>
+                <Text style={styles.sectionLabel}>Pick a sound</Text>
+                <View style={styles.soundGrid}>
+                  {['Rain', 'Ocean', 'Forest', 'White noise'].map((s) => (
+                    <TouchableOpacity key={s} onPress={() => setMedSound(s)} style={[styles.soundChip, medSound === s && styles.soundChipActive]}>
+                      <MaterialCommunityIcons name={SOUND_ICONS[s] || 'music'} size={14} color={medSound === s ? '#fff' : theme.colors.text.primary} />
+                      <Text style={[styles.soundChipText, medSound === s && { color: '#fff' }]}>{s}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={styles.sectionLabel}>Duration: {medDuration} min</Text>
+                <View style={styles.durationRow}>
+                  {[5, 10, 15, 20, 30].map((d) => (
+                    <TouchableOpacity key={d} onPress={() => setMedDuration(d)} style={[styles.durationChip, medDuration === d && styles.durationChipActive]}>
+                      <Text style={[styles.durationChipText, medDuration === d && { color: '#fff' }]}>{d}m</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TouchableOpacity style={styles.startBtn} onPress={startMedSession}>
+                  <Text style={styles.startBtnText}>Start session</Text>
+                </TouchableOpacity>
               </View>
               <Text style={styles.sectionLabel}>Duration: {medDuration} min</Text>
               <View style={styles.durationRow}>
@@ -586,12 +726,100 @@ const Home = () => {
             </View>
           )}
 
-          <TouchableOpacity style={styles.modalClose} onPress={() => setMedModal(false)}>
-            <Text style={styles.modalCloseText}>Close</Text>
+            <TouchableOpacity style={styles.modalClose} onPress={() => setMedModal(false)}>
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Meditation Session – full screen */}
+      <Modal visible={medSession} animationType="fade" statusBarTranslucent onRequestClose={endMedSession}>
+        <View style={sessionStyles.container}>
+          <View style={sessionStyles.topInfo}>
+            <MaterialCommunityIcons name={SOUND_ICONS[medSound] || 'music'} size={24} color={SESSION_AURA_COLOR} />
+            <Text style={sessionStyles.soundName}>{medSound}</Text>
+            <Text style={sessionStyles.durationLabel}>{medDuration} min session</Text>
+          </View>
+
+          <View style={sessionStyles.animArea}>
+            {/* Ombre gradient rings — outer → inner, each scales more at rest */}
+            {AURA_RINGS.map(({ size, opacityRange, scaleRange }, i) => {
+              const ringOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: opacityRange });
+              const ringScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: scaleRange });
+              return (
+                <Animated.View
+                  key={i}
+                  style={[sessionStyles.auraRing, {
+                    width: size, height: size, borderRadius: size / 2,
+                    opacity: ringOpacity, transform: [{ scale: ringScale }],
+                  }]}
+                />
+              );
+            })}
+            {/* Centre circle – timer */}
+            <Animated.View style={[sessionStyles.auraCenter, {
+              transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1.0, 1.025] }) }],
+            }]}>
+              <Text style={sessionStyles.timerText}>{formatTime(medTimeLeft)}</Text>
+              <Text style={sessionStyles.timerLabel}>remaining</Text>
+            </Animated.View>
+          </View>
+
+          <TouchableOpacity style={sessionStyles.stopBtn} onPress={endMedSession}>
+            <Text style={sessionStyles.stopBtnText}>End Session</Text>
           </TouchableOpacity>
-        </SwipeDismissSheet>
-      </ScrollView>
-    </View>
+        </View>
+      </Modal>
+
+      {/* ── Completion screen ── */}
+      <Modal visible={medComplete} animationType="fade" statusBarTranslucent onRequestClose={closeCompletion}>
+        <View style={completionStyles.container}>
+          {/* Soft background glow */}
+          <View style={completionStyles.bgGlow} />
+
+          {/* Lotus + sparkles */}
+          <View style={completionStyles.flowerArea}>
+            {SPARKLE_ANGLES.map((angle, i) => {
+              const rad = (angle * Math.PI) / 180;
+              const tx = sparkleAnim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.cos(rad) * 78] });
+              const ty = sparkleAnim.interpolate({ inputRange: [0, 1], outputRange: [0, Math.sin(rad) * 78] });
+              const op = sparkleAnim.interpolate({ inputRange: [0, 0.25, 0.72, 1], outputRange: [0, 1, 0.65, 0] });
+              const sz = i % 2 === 0 ? 9 : 6;
+              return (
+                <Animated.View
+                  key={i}
+                  style={[completionStyles.sparkle, { width: sz, height: sz, borderRadius: sz / 2, opacity: op, transform: [{ translateX: tx }, { translateY: ty }] }]}
+                />
+              );
+            })}
+            <Animated.Text style={[completionStyles.lotusEmoji, {
+              opacity: riseAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }),
+              transform: [
+                { scale: riseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.15, 1] }) },
+                { translateY: riseAnim.interpolate({ inputRange: [0, 1], outputRange: [90, 0] }) },
+              ],
+            }]}>
+              🪷
+            </Animated.Text>
+          </View>
+
+          {/* Thank-you message */}
+          <Animated.View style={[completionStyles.textBlock, { opacity: textFadeAnim }]}>
+            <Text style={completionStyles.thankLine1}>Thank you for taking</Text>
+            <Text style={completionStyles.thankLine2}>time for yourself</Text>
+          </Animated.View>
+
+          {/* Subtitle + button */}
+          <Animated.View style={[completionStyles.bottomBlock, { opacity: subFadeAnim }]}>
+            <Text style={completionStyles.subtitle}>{medDuration} min · {medSound}</Text>
+            <TouchableOpacity style={completionStyles.continueBtn} onPress={closeCompletion}>
+              <Text style={completionStyles.continueBtnText}>Continue</Text>
+            </TouchableOpacity>
+          </Animated.View>
+        </View>
+      </Modal>
+    </ScrollView>
   );
 };
 
@@ -616,6 +844,25 @@ const styles = StyleSheet.create({
   weekRow: { flexDirection: 'row', alignItems: 'flex-end', height: 70, gap: 6, marginTop: theme.spacing.xs },   // CHANGED: extra clearance under the title
   weekCol: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
   weekBar: { width: '100%', borderRadius: 4 },
+  weekDay: { fontSize: 10, fontWeight: '700', color: theme.colors.text.secondary },
+  habitRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, paddingVertical: 6 },
+  habitIcon: {
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: theme.colors.surface.brandPrimary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  habitName: { flex: 1, fontSize: theme.typography.fontSize.paragraph.sm, fontWeight: '600', color: theme.colors.text.primary },
+  habitDone: { color: theme.colors.text.secondary, textDecorationLine: 'line-through' },
+  checkbox: {
+    width: 20, height: 20, borderRadius: 10, borderWidth: 2,
+    borderColor: theme.colors.border.three, alignItems: 'center', justifyContent: 'center',
+  },
+  checkboxDone: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  seeMore: { fontSize: 11, fontWeight: '700', color: theme.colors.primary, marginTop: theme.spacing.xs },
+  meditationCard: {
+    borderRadius: 20, padding: theme.spacing.lg, marginBottom: theme.spacing.md,
+    backgroundColor: '#7c6ef0',
+  },
   weekDay: { fontSize: 10, fontWeight: '700', color: pastel.textMuted },                                          // CHANGED
   // Habit rows
   habitRowWrapper: { flexDirection: 'row', alignItems: 'center' },
@@ -668,6 +915,46 @@ const styles = StyleSheet.create({
   guidedName: { fontSize: 14, fontWeight: '700', color: pastel.textDeep },
   guidedDesc: { fontSize: 11, color: pastel.textMuted },
   aiLabel: { fontSize: 10, fontWeight: '700', color: theme.colors.primary },
+});
+
+const sessionStyles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0d1117', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 80, paddingHorizontal: 24 },
+  topInfo: { alignItems: 'center', gap: 8 },
+  soundName: { fontSize: 22, fontWeight: '800', letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 6, color: SESSION_AURA_COLOR },
+  durationLabel: { fontSize: 13, color: 'rgba(255,255,255,0.40)', fontWeight: '600' },
+  animArea: { width: 320, height: 320, alignItems: 'center', justifyContent: 'center' },
+  auraRing: { position: 'absolute', backgroundColor: SESSION_AURA_COLOR },
+  auraCenter: {
+    position: 'absolute',
+    width: 128, height: 128, borderRadius: 64,
+    backgroundColor: SESSION_AURA_COLOR,
+    alignItems: 'center', justifyContent: 'center', opacity: 0.88,
+  },
+  timerText: { fontSize: 40, fontWeight: '800', color: '#fff' },
+  timerLabel: { fontSize: 11, color: 'rgba(255,255,255,0.60)', fontWeight: '600', marginTop: 4 },
+  stopBtn: { paddingHorizontal: 44, paddingVertical: 16, borderRadius: 32, borderWidth: 2, borderColor: SESSION_AURA_COLOR },
+  stopBtnText: { fontSize: 15, fontWeight: '700', color: SESSION_AURA_COLOR },
+});
+
+const completionStyles = StyleSheet.create({
+  container: {
+    flex: 1, backgroundColor: '#0d1117',
+    alignItems: 'center', justifyContent: 'center', gap: 44, paddingHorizontal: 32,
+  },
+  bgGlow: {
+    position: 'absolute', width: 360, height: 360, borderRadius: 180,
+    backgroundColor: SESSION_AURA_COLOR, opacity: 0.07,
+  },
+  flowerArea: { width: 170, height: 170, alignItems: 'center', justifyContent: 'center' },
+  sparkle: { position: 'absolute', backgroundColor: SESSION_AURA_COLOR },
+  lotusEmoji: { fontSize: 86 },
+  textBlock: { alignItems: 'center', gap: 6 },
+  thankLine1: { fontSize: 26, fontWeight: '700', color: 'rgba(255,255,255,0.75)', textAlign: 'center' },
+  thankLine2: { fontSize: 28, fontWeight: '800', color: SESSION_AURA_COLOR, textAlign: 'center' },
+  bottomBlock: { alignItems: 'center', gap: 28 },
+  subtitle: { fontSize: 14, color: 'rgba(255,255,255,0.38)', fontWeight: '600', textAlign: 'center', letterSpacing: 0.5 },
+  continueBtn: { paddingHorizontal: 52, paddingVertical: 18, borderRadius: 32, backgroundColor: SESSION_AURA_COLOR },
+  continueBtnText: { fontSize: 16, fontWeight: '800', color: '#fff' },
 });
 
 export default Home;
