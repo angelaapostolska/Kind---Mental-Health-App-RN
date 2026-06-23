@@ -33,7 +33,7 @@ const baseQueryWithBearer = async (args, api, extraOptions) => {
 export const cdtApi = createApi({
   reducerPath: 'cdtApi',
   baseQuery: baseQueryWithBearer,
-  tagTypes: ['User', 'MoodEntry', 'JournalEntry', 'Emotion', 'MoodFactor', 'Habit', 'HabitLog'],
+  tagTypes: ['User', 'MoodEntry', 'JournalEntry', 'JournalPrompt', 'Emotion', 'MoodFactor', 'Habit', 'HabitLog'],
   endpoints: (builder) => ({
     // --- User ---
     getUserByEmail: builder.query({
@@ -106,6 +106,10 @@ export const cdtApi = createApi({
         method: 'DELETE',
       }),
       invalidatesTags: ['JournalEntry'],
+    }),
+    getJournalPromptsByType: builder.query({
+      query: (type) => `api/journal-prompts/type/${type}`,
+      providesTags: ['JournalPrompt'],
     }),
 
     // --- Emotions ---
@@ -191,11 +195,12 @@ export const {
   useUpdateJournalEntryMutation,
   useDeleteJournalEntryMutation,
   useGetEmotionsQuery,
-  useGetEmotionsByCategoryQuery,
+  useGetEmotionsByCategoryQuery, // ADDED: hook for category-filtered emotions
   useGetMoodFactorsQuery,
   useGetHabitsQuery,
   useCreateHabitMutation,
   useDeleteHabitMutation,
   useGetHabitTodayQuery,
   useToggleHabitTodayMutation,
+  useGetJournalPromptsByTypeQuery,
 } = cdtApi;
