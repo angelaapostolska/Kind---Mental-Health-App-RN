@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Keyboard, TouchableWithoutFeedback, ScrollView } from 'react-native';
+import {
+  View, Text, StyleSheet, TouchableOpacity,
+  Keyboard, TouchableWithoutFeedback, ScrollView,
+  KeyboardAvoidingView, Platform,
+} from 'react-native';
 import { useLoginMutation } from '@/api/authApi';
 import { ScreenTitle, ThemeInput, ThemePasswordInput, ThemeButton } from '@/components';
 import NavigationScreens from '@/config/NavigationScreens';
@@ -20,9 +24,7 @@ const Login = ({ navigation }) => {
       return;
     }
     try {
-      // login now returns the user id directly in the response
       const userData = await login({ email, password }).unwrap();
-
       dispatch(setUserId(userData.id));
       dispatch(setUserEmail(email));
       dispatch(setSignedIn(true));
@@ -34,16 +36,31 @@ const Login = ({ navigation }) => {
   };
 
   return (
-    <View style={styles.safeArea}>
+    // KeyboardAvoidingView pushes the content up on iOS; on Android
+    // android:windowSoftInputMode="adjustResize" handles it natively.
+    <KeyboardAvoidingView
+      style={styles.safeArea}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          // Ensure the scroll view bounces so the user can always
+          // scroll up to see both inputs even on very small screens.
+          showsVerticalScrollIndicator={false}
+          bounces
+        >
           <View style={styles.container}>
+            {/* Logo / title area */}
             <View style={styles.logoContent}>
               <View style={styles.logoPlaceholder} />
               <ScreenTitle title="Welcome Back" containerStyle={styles.title} />
               <Text style={styles.subtitle}>Your mental wellness companion</Text>
             </View>
 
+            {/* Form — pushed up by KeyboardAvoidingView */}
             <View style={styles.formContainer}>
               <View style={styles.inputContainer}>
                 <ThemeInput
@@ -52,11 +69,14 @@ const Login = ({ navigation }) => {
                   value={email}
                   autoCapitalize="none"
                   keyboardType="email-address"
+                  returnKeyType="next"
                 />
                 <ThemePasswordInput
                   placeholder="Password"
                   onChangeText={setPassword}
                   value={password}
+                  returnKeyType="done"
+                  onSubmitEditing={handleLoginPress}
                 />
                 <TouchableOpacity activeOpacity={0.6} onPress={() => {}}>
                   <Text style={styles.forgotPass}>Forgot Password?</Text>
@@ -77,7 +97,7 @@ const Login = ({ navigation }) => {
           </View>
         </ScrollView>
       </TouchableWithoutFeedback>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
