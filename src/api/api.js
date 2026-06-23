@@ -1,13 +1,14 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import * as SecureStore from 'expo-secure-store';
 import { env } from '@/config/environments';
+import { setSignedIn, setUserId, setUserEmail } from '@/store/commonSlices/userSlice';
 
 // Base fetch query
 const rawBaseQuery = fetchBaseQuery({
   baseUrl: env.base_api_url,
 });
 
-// Async wrapper to attach Bearer token
+// Async wrapper to attach Bearer token and handle token expiry
 const baseQueryWithBearer = async (args, api, extraOptions) => {
   const accessToken = await SecureStore.getItemAsync('access_token');
 
@@ -24,7 +25,13 @@ const baseQueryWithBearer = async (args, api, extraOptions) => {
   const result = await rawBaseQuery(args, api, extraOptions);
 
   if (result.error) {
-    console.error('[API] ✗ error', result.error?.status, url, result.error?.data);
+    console.error('[API] ✗ error', result.error?.status, result.error?.data);
+    if (result.error.status === 401) {
+      await SecureStore.deleteItemAsync('access_token');
+      api.dispatch(setSignedIn(false));
+      api.dispatch(setUserId(null));
+      api.dispatch(setUserEmail(''));
+    }
   }
 
   return result;
