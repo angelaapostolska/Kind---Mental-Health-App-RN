@@ -7,6 +7,9 @@ import { theme } from '@/constants/theme';
 import { MOOD_LEVELS, moodColor, moodLabel, isoDate, showSuccessToast, showErrorToast } from '@/utils';
 import { useCreateJournalEntryMutation, useCreateMoodEntryMutation, useDeleteJournalEntryMutation, useGetJournalPromptsByTypeQuery, useGetJournalEntriesQuery } from '@/api/api';
 import { useAppSelector } from '@/store/store';
+import ThoughtRecord from '@/components/ThoughtRecord';
+import ThoughtRecordDetail from '@/components/ThoughtRecordDetail';
+import { parseStructured } from '@/components/thoughtRecord/parts';
 
 // moodValue is stored as 1-5, matching the frontend mood level directly
 const moodValueToLevel = (v) => v || 3;
@@ -57,6 +60,8 @@ const Journal = () => {
   const [mood, setMood] = useState(null);
   const [activePrompt, setActivePrompt] = useState(undefined);
   const [selectedEntry, setSelectedEntry] = useState(null);
+  const [trOpen, setTrOpen] = useState(false);
+  const [trDetailEntry, setTrDetailEntry] = useState(null);
 
   const userId = useAppSelector((state) => state.userState.userId);
   const [createJournalEntry] = useCreateJournalEntryMutation();
@@ -69,6 +74,11 @@ const Journal = () => {
 
   // Load GENERAL prompts from backend so we have real IDs to send
   const { data: backendPrompts = [] } = useGetJournalPromptsByTypeQuery('GENERAL');
+
+  // The CBT thought record is an ANT_EXERCISE prompt; grab its id to link entries.
+  // If the backend has none seeded yet, the record still saves as a blank entry.
+  const { data: antPrompts = [] } = useGetJournalPromptsByTypeQuery('ANT_EXERCISE');
+  const antPromptId = antPrompts[0]?.id ?? null;
 
   // Pick 3 random prompts once when the data loads (stable until next load)
   const todaysPrompts = useMemo(
@@ -162,6 +172,18 @@ const Journal = () => {
         <Text style={styles.freewriteText}>Write freely</Text>
       </TouchableOpacity>
 
+      {/* CBT Thought Record — guided 7-step exercise */}
+      <TouchableOpacity style={styles.cbtCard} onPress={() => setTrOpen(true)} activeOpacity={0.85}>
+        <View style={styles.cbtIcon}>
+          <MaterialCommunityIcons name="head-cog-outline" size={20} color="#fff" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.cbtTitle}>Thought Record</Text>
+          <Text style={styles.cbtSubtitle}>Reframe an unhelpful thought in 7 guided steps</Text>
+        </View>
+        <MaterialIcons name="chevron-right" size={22} color={theme.colors.primary} />
+      </TouchableOpacity>
+
       {/* Past Entries */}
       <Text style={styles.entriesTitle}>Past Entries</Text>
       {entriesLoading && <ActivityIndicator color={theme.colors.primary} style={{ marginTop: 16 }} />}
@@ -173,7 +195,7 @@ const Journal = () => {
         <JournalEntryCard
           key={e.id}
           entry={e}
-          onPress={() => setSelectedEntry(e)}
+          onPress={() => (parseStructured(e) ? setTrDetailEntry(e) : setSelectedEntry(e))}
           onRequestDelete={confirmDelete}
         />
       ))}
@@ -272,6 +294,21 @@ const Journal = () => {
           </View>
         </View>
       </Modal>
+
+      {/* CBT Thought Record modal */}
+      <ThoughtRecord
+        visible={trOpen}
+        onClose={() => setTrOpen(false)}
+        userId={userId}
+        antPromptId={antPromptId}
+      />
+
+      {/* CBT Thought Record detail (swipeable, per-page editable) */}
+      <ThoughtRecordDetail
+        visible={!!trDetailEntry}
+        entry={trDetailEntry}
+        onClose={() => setTrDetailEntry(null)}
+      />
     </ScrollView>
   );
 };
@@ -295,6 +332,14 @@ const styles = StyleSheet.create({
     shadowColor: theme.colors.primary, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
   freewriteText: { fontSize: theme.typography.fontSize.paragraph.sm, fontWeight: '700', color: '#fff' },
+  cbtCard: {
+    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm,
+    backgroundColor: theme.colors.surface.brandPrimary, borderRadius: 16, padding: theme.spacing.md,
+    marginBottom: theme.spacing.md, borderWidth: 1, borderColor: theme.colors.primary + '33',
+  },
+  cbtIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' },
+  cbtTitle: { fontSize: theme.typography.fontSize.paragraph.md, fontWeight: '800', color: theme.colors.text.primary },
+  cbtSubtitle: { fontSize: 12, color: theme.colors.text.secondary, marginTop: 2 },
   entriesTitle: { fontSize: theme.typography.fontSize.paragraph.md, fontWeight: '700', color: theme.colors.text.primary, marginBottom: theme.spacing.sm },
   emptyText: { fontSize: theme.typography.fontSize.paragraph.sm, color: theme.colors.text.secondary, textAlign: 'center', marginTop: theme.spacing.md },
   entryCard: {
