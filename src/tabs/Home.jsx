@@ -26,6 +26,7 @@ import HabitRow, { HabitStatus } from '@/components/home/HabitRow';
 import HabitModal from '@/components/home/HabitModal';
 import MeditationModal from '@/components/home/MeditationModal';
 import MeditationSession from '@/components/home/MeditationSession';
+import GuidedMeditationSession from '@/components/home/GuidedMeditationSession';
 
 const Home = () => {
   const insets   = useSafeAreaInsets();
@@ -104,6 +105,7 @@ const Home = () => {
   const [habitModal,    setHabitModal]    = useState(false);
   const [medModal,      setMedModal]      = useState(false);
   const [sessionConfig, setSessionConfig] = useState(null); // { sound, duration } | null
+  const [guidedConfig,  setGuidedConfig]  = useState(null); // { type } | null
 
   const greeting    = getGreeting();
   const currentWeek = getCurrentWeek();
@@ -223,6 +225,7 @@ const Home = () => {
         visible={medModal}
         onClose={() => setMedModal(false)}
         onStart={(config) => { setMedModal(false); setSessionConfig(config); }}
+        onStartGuided={(config) => { setMedModal(false); setGuidedConfig(config); }}
       />
 
       <MeditationSession
@@ -230,6 +233,12 @@ const Home = () => {
         sound={sessionConfig?.sound ?? 'Rain'}
         duration={sessionConfig?.duration ?? 5}
         onDone={() => setSessionConfig(null)}
+      />
+
+      <GuidedMeditationSession
+        visible={guidedConfig !== null}
+        type={guidedConfig?.type ?? 'Body Scan'}
+        onDone={() => setGuidedConfig(null)}
       />
     </View>
   );
