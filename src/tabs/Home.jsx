@@ -126,12 +126,9 @@ const Home = () => {
 
         {/* Header */}
         <View style={styles.header}>
-          <GlossyCircle size={48} backgroundColor={pastel.purple} style={styles.avatarShadow}>
-            <Text style={styles.avatarText}>{initials}</Text>
-          </GlossyCircle>
           <View>
             <Text style={styles.greeting}>{greeting}</Text>
-            <Text style={styles.userName}>Hi, {userName} 👋</Text>
+            <Text style={styles.userName}>Hi, {userName}</Text>
           </View>
         </View>
 
@@ -241,7 +238,7 @@ const Home = () => {
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: 'transparent' },
   content: { padding: theme.spacing.md, paddingBottom: 100 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.lg },
+  header: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.lg, paddingHorizontal: 8},
   avatarShadow: {
     shadowColor: pastel.purpleDeep, shadowOpacity: 0.35,
     shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 4,
