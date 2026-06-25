@@ -13,20 +13,20 @@ const SOUND_ICONS = {
 };
 
 const SOUNDS = ['Rain', 'Ocean', 'Forest', 'White noise'];
-
 const DURATIONS = [5, 10, 15, 20, 30];
 
 const GUIDED_TYPES = [
-  { name: 'Body Scan',       desc: 'Release tension head to toe' },
-  { name: 'Loving Kindness', desc: 'Cultivate compassion' },
-  { name: 'Focus',           desc: 'Train sustained attention' },
-  { name: 'Sleep',           desc: 'Drift off peacefully' },
+  { name: 'Body Scan',       desc: 'Release tension head to toe',   icon: 'human',                duration: '10 min' },
+  { name: 'Loving Kindness', desc: 'Cultivate compassion',          icon: 'heart-outline',        duration: '8 min'  },
+  { name: 'Focus',           desc: 'Train sustained attention',     icon: 'eye-outline',          duration: '10 min' },
+  { name: 'Sleep',           desc: 'Drift off peacefully',          icon: 'moon-waning-crescent', duration: '12 min' },
 ];
 
-// onStart receives { sound, duration }
-const MeditationModal = ({ visible, onClose, onStart }) => {
-  const [mode, setMode] = useState('sound');
-  const [sound, setSound] = useState('Rain');
+// onStart        receives { sound, duration }  — sound + timer sessions
+// onStartGuided  receives { type }             — AI guided sessions
+const MeditationModal = ({ visible, onClose, onStart, onStartGuided }) => {
+  const [mode, setMode]         = useState('sound');
+  const [sound, setSound]       = useState('Rain');
   const [duration, setDuration] = useState(5);
 
   return (
@@ -87,15 +87,23 @@ const MeditationModal = ({ visible, onClose, onStart }) => {
       ) : (
         <View>
           {GUIDED_TYPES.map((t) => (
-            <TouchableOpacity key={t.name} style={styles.guidedItem}>
-              <GlossyCircle size={38} backgroundColor="rgba(183,156,242,0.30)">
-                <MaterialCommunityIcons name="brain" size={18} color={pastel.purpleDeep} />
+            <TouchableOpacity
+              key={t.name}
+              style={styles.guidedItem}
+              onPress={() => onStartGuided({ type: t.name })}
+              activeOpacity={0.75}
+            >
+              <GlossyCircle size={42} backgroundColor="rgba(183,156,242,0.30)">
+                <MaterialCommunityIcons name={t.icon} size={20} color={pastel.purpleDeep} />
               </GlossyCircle>
               <View style={{ flex: 1 }}>
                 <Text style={styles.guidedName}>{t.name}</Text>
                 <Text style={styles.guidedDesc}>{t.desc}</Text>
               </View>
-              <Text style={styles.aiLabel}>AI</Text>
+              <View style={styles.guidedRight}>
+                <Text style={styles.aiLabel}>AI</Text>
+                <Text style={styles.guidedDuration}>{t.duration}</Text>
+              </View>
             </TouchableOpacity>
           ))}
         </View>
@@ -118,32 +126,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row', backgroundColor: theme.colors.surface.two,
     borderRadius: 20, padding: 4, marginBottom: theme.spacing.md,
   },
-  tab: { flex: 1, paddingVertical: 8, borderRadius: 16, alignItems: 'center' },
+  tab:       { flex: 1, paddingVertical: 8, borderRadius: 16, alignItems: 'center' },
   tabActive: {
     backgroundColor: theme.colors.surface.one,
     shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, elevation: 1,
   },
-  tabText: { fontSize: 12, fontWeight: '700', color: pastel.textMuted },
+  tabText:       { fontSize: 12, fontWeight: '700', color: pastel.textMuted },
   tabTextActive: { color: pastel.textDeep },
   label: {
     fontSize: 12, fontWeight: '700', color: pastel.textDeep,
     marginBottom: theme.spacing.xs, marginTop: theme.spacing.xs,
   },
-  soundGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: theme.spacing.sm },
+  soundGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: theme.spacing.sm },
   soundChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 14, paddingVertical: 10,
     borderRadius: 16, backgroundColor: theme.colors.surface.two,
   },
-  soundChipActive: { backgroundColor: theme.colors.primary },
-  soundChipText: { fontSize: 13, fontWeight: '600', color: pastel.textDeep },
-  durationRow: { flexDirection: 'row', gap: 8, marginBottom: theme.spacing.md },
+  soundChipActive:  { backgroundColor: theme.colors.primary },
+  soundChipText:    { fontSize: 13, fontWeight: '600', color: pastel.textDeep },
+  durationRow:      { flexDirection: 'row', gap: 8, marginBottom: theme.spacing.md },
   durationChip: {
     paddingHorizontal: 14, paddingVertical: 8,
     borderRadius: 16, backgroundColor: theme.colors.surface.two,
   },
   durationChipActive: { backgroundColor: theme.colors.primary },
-  durationChipText: { fontSize: 12, fontWeight: '600', color: pastel.textDeep },
+  durationChipText:   { fontSize: 12, fontWeight: '600', color: pastel.textDeep },
   startBtn: {
     backgroundColor: theme.colors.primary,
     borderRadius: 20, padding: theme.spacing.md, alignItems: 'center',
@@ -154,9 +162,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.surface.two,
     borderRadius: 16, padding: theme.spacing.md, marginBottom: 8,
   },
-  guidedName: { fontSize: 14, fontWeight: '700', color: pastel.textDeep },
-  guidedDesc: { fontSize: 11, color: pastel.textMuted },
-  aiLabel: { fontSize: 10, fontWeight: '700', color: theme.colors.primary },
+  guidedName:     { fontSize: 14, fontWeight: '700', color: pastel.textDeep },
+  guidedDesc:     { fontSize: 11, color: pastel.textMuted, marginTop: 2 },
+  guidedRight:    { alignItems: 'flex-end', gap: 4 },
+  aiLabel:        { fontSize: 10, fontWeight: '800', color: theme.colors.primary },
+  guidedDuration: { fontSize: 10, fontWeight: '600', color: pastel.textMuted },
   closeBtn: {
     marginTop: theme.spacing.md, backgroundColor: theme.colors.surface.two,
     borderRadius: 16, padding: theme.spacing.md, alignItems: 'center',
