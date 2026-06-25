@@ -136,7 +136,7 @@ export const GlossyCircle = ({ size = 40, backgroundColor, children, style }) =>
     <View
       pointerEvents="none"
       style={{
-        position: 'absolute', top: -size * 0.3, left: -size * 0.2,
+        position: 'absolute', top: -size * 0.05, left: -size * 0.05,
         width: size * 0.95, height: size * 0.95, borderRadius: size * 0.475,
         backgroundColor: 'rgba(255,255,255,0.55)',
       }}
