@@ -11,11 +11,7 @@
 // platform, with no native blur dependency at all.
 
 import React from 'react';
-// CHANGED: added Text / TouchableOpacity / ActivityIndicator — needed by the new
-// GradientButton primitive below (used now that Mood / Journal / Breathe / Profile
-// all share the same pastel pill button as the Home screen, instead of each tab
-// re-styling a flat purple button locally).
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 
@@ -60,12 +56,6 @@ export const pastel = {
   glassFill: 'rgba(255,255,255,0.50)',
   glassFillStrong: 'rgba(255,255,255,0.72)',
   glassBorder: 'rgba(255,255,255,0.65)',
-
-  // CHANGED: a soft destructive tint that still belongs in the pastel palette —
-  // used by Mood/Journal delete affordances so "delete" no longer punches a hard
-  // material-red rectangle through the otherwise dreamy UI.
-  rose: '#FF6F91',
-  roseSoft: 'rgba(255,111,145,0.16)',
 };
 
 const GLOW = {
@@ -221,72 +211,6 @@ export const GradientHeroCard = ({
   </View>
 );
 
-// ── Gradient pill button ────────────────────────────────────────────────────────
-// NEW: the shared primary-action button. The Home screen's "Save Mood" pill in the
-// reference is a glossy gradient capsule with a soft colored glow — every other tab
-// was re-implementing a flat `theme.colors.primary` button instead. This unifies all
-// of them so "Continue", "Save mood", "Start", "Write freely", "Save entry", etc. all
-// read as the same bubbly pill.
-//
-// Props:
-//   label    — text (or pass `children` for custom content)
-//   icon     — optional element rendered before the label (e.g. a + icon)
-//   onPress, disabled, loading
-//   small    — tighter padding for inline / secondary placements
-//   colors   — override gradient (e.g. a rose gradient for a Stop button)
-//   glow     — 'purple' | 'pink' | 'mint' shadow tint (default 'purple')
-//   style    — extra wrapper style (e.g. { flex: 2 })
-export const GradientButton = ({
-                                 label,
-                                 children,
-                                 icon,
-                                 onPress,
-                                 disabled,
-                                 loading,
-                                 small,
-                                 colors = [pastel.heroPink, pastel.heroPurple, pastel.heroBlue],
-                                 glow = 'purple',
-                                 style,
-                                 textStyle,
-                                 ...rest
-                               }) => (
-  <TouchableOpacity
-    activeOpacity={0.85}
-    onPress={onPress}
-    disabled={disabled || loading}
-    style={[{ borderRadius: 999 }, (disabled || loading) && { opacity: 0.5 }, style]}
-    {...rest}
-  >
-    <View style={[ggStyles.btnShadow, { shadowColor: GLOW[glow] || GLOW.purple }]}>
-      <LinearGradient
-        colors={colors}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={[ggStyles.btnFill, small && ggStyles.btnFillSmall]}
-      >
-        {/* glossy top-left sheen, same recipe as the cards */}
-        <LinearGradient
-          colors={['rgba(255,255,255,0.5)', 'rgba(255,255,255,0)']}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.5, y: 1 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 999 }]}
-          pointerEvents="none"
-        />
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <>
-            {icon}
-            {label != null
-              ? <Text style={[ggStyles.btnText, small && { fontSize: 13 }, textStyle]}>{label}</Text>
-              : children}
-          </>
-        )}
-      </LinearGradient>
-    </View>
-  </TouchableOpacity>
-);
-
 const ggStyles = StyleSheet.create({
   shadowWrap: {
     shadowOpacity: 0.28,
@@ -306,16 +230,4 @@ const ggStyles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)',
   },
   padding: { padding: 18 },
-  // NEW: GradientButton
-  btnShadow: {
-    borderRadius: 999,
-    shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 },
-    elevation: 5,
-  },
-  btnFill: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    paddingVertical: 15, paddingHorizontal: 24, borderRadius: 999, overflow: 'hidden',
-  },
-  btnFillSmall: { paddingVertical: 11, paddingHorizontal: 18 },
-  btnText: { color: '#fff', fontWeight: '800', fontSize: 15, letterSpacing: 0.2 },
 });

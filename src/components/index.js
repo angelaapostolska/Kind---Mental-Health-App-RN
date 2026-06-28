@@ -1,4 +1,4 @@
-import { GlassCard, GradientHeroCard, GradientButton, ScreenGradientBackground, GlossyCircle, pastel } from './Glass'; // CHANGED: + GradientButton
+import { GlassCard, GradientHeroCard, ScreenGradientBackground, GlossyCircle, pastel } from './Glass';
 import HeaderBackButton from './HeaderBackButton';
 import MoodDot from './MoodDot';
 import ScreenTitle from './ScreenTitle';
@@ -8,5 +8,5 @@ import ThemePasswordInput from './ThemePasswordInput';
 
 export {
   ThemeButton, ThemeInput, ThemePasswordInput, HeaderBackButton, ScreenTitle, MoodDot,
-  GlassCard, GradientHeroCard, GradientButton, ScreenGradientBackground, GlossyCircle, pastel,
+  GlassCard, GradientHeroCard, ScreenGradientBackground, GlossyCircle, pastel,
 };
