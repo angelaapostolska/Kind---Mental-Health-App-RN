@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'rea
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { theme } from '@/constants/theme';
-import { GlossyCircle, pastel } from '@/components';
+import { pastel } from '@/components';
+import { SoftIcon } from '@/components/home/SoftGlass'; // CHANGED: clay icon badge
 import { showErrorToast } from '@/utils';
 import { useGetHabitTodayQuery, useToggleHabitTodayMutation } from '@/api/api';
 
@@ -70,9 +71,11 @@ const HabitRow = ({ habit, showDelete = false, onDelete }) => {
   return (
     <View style={styles.wrapper}>
       <TouchableOpacity onPress={onPress} disabled={isLoading} style={styles.row} activeOpacity={0.7}>
-        <GlossyCircle size={38} backgroundColor="rgba(183,156,242,0.30)">
-          <MaterialCommunityIcons name={habitIconName(habit)} size={16} color={habit.colorHex || pastel.purpleDeep} />
-        </GlossyCircle>
+        {/* CHANGED: clay icon badge — gradient derived from the habit's own color,
+            glossy highlight + soft colored shadow, white glyph on top */}
+        <SoftIcon size={38} radius={13} baseColor={habit.colorHex || pastel.purpleDeep}>
+          <MaterialCommunityIcons name={habitIconName(habit)} size={16} color="#fff" />
+        </SoftIcon>
         <Text style={[styles.name, done && styles.nameDone]}>{habit.name}</Text>
         {isLoading ? (
           <ActivityIndicator size="small" color={pastel.purpleDeep} />
