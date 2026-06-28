@@ -9,8 +9,8 @@ import { Audio } from 'expo-av';
 // Create a free Speech resource: Azure portal → "Speech service" → free F0 tier.
 // Free tier: 500,000 characters / month. Paste your key + region below.
 //uncomment before use
-// const AZURE_KEY    = 'api_key_from_discord';
-// const AZURE_REGION = 'region_from_dc';
+const AZURE_KEY    = '55LVxe5fwy05MbcH6ka2TNU2e7vj9S6oQxGOPnNlT3epsFyYZpmlJQQJ99CFAC5T7U2XJ3w3AAAYACOGKVTQ';
+const AZURE_REGION = 'francecentral';
 const VOICE        = 'en-US-CoraMultilingualNeural';
 
 // Pacing for a calm, meditative delivery.
