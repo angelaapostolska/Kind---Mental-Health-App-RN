@@ -9,6 +9,7 @@ import { theme } from '@/constants/theme';
 import { ScreenGradientBackground, GlassCard, GradientButton, pastel } from '@/components';
 import { MOOD_LEVELS, moodColor, moodLabel, moodEmoji, showErrorToast, showSuccessToast, isoDate } from '@/utils';
 import { useAppSelector } from '@/store/store';
+import MoodInsightCard from '@/components/mood/MoodInsightCard';
 import {
   useGetMoodEntriesByMonthQuery,
   useCreateMoodEntryMutation,
@@ -421,6 +422,8 @@ const Mood = () => {
                 ))}
               </View>
             </GlassCard>
+
+            <MoodInsightCard />
 
             <Text style={styles.entriesHeading}>Entries this month</Text>
             {entriesLoading ? (
