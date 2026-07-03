@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient'; // CHANGED: glossy gradient avatar
+import { LinearGradient } from 'expo-linear-gradient'; // glossy gradient avatar
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as SecureStore from 'expo-secure-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
-// CHANGED: shared pastel-glass design system (same as Home)
-import { ScreenGradientBackground, GlassCard, GlossyCircle, pastel } from '@/components';
+// CHANGED: switched from Glass.jsx's GlassCard/GlossyCircle to the same
+// SoftCard/SoftIcon primitives Home and Journal actually use. GlassCard's
+// CardShine (fixed-position blob + sparkles) is tuned for big square hero
+// cards — on Profile's compact stat tiles / settings rows it landed on top
+// of icons and text, same bug we just fixed on the Journal prompt cards.
+import { ScreenGradientBackground, pastel } from '@/components';
+import { SoftCard, SoftIcon } from '@/components/home/SoftGlass';
 import { useAppDispatch, useAppSelector } from '@/store/store';
 import { setSignedIn } from '@/store/commonSlices/userSlice';
 import {
@@ -23,11 +28,15 @@ const formatTime = (h, m) => {
   return `${hh}:${String(m).padStart(2, '0')} ${ampm}`;
 };
 
+// CHANGED: paired each setting with a SoftIcon tint so the row picks up the
+// same varied-but-cohesive icon coloring Home uses (mint for meditation,
+// purple for the CBT badge, lavender for the prompt lightbulbs) instead of
+// four identical purple circles in a row.
 const SETTINGS = [
-  { icon: 'notifications', label: 'Notifications', desc: 'Reminders & alerts' },
-  { icon: 'brightness-6', label: 'Appearance', desc: 'Theme & display' },
-  { icon: 'volume-up', label: 'Sound & Haptics', desc: 'Audio preferences' },
-  { icon: 'security', label: 'Privacy', desc: 'Data & security' },
+  { icon: 'notifications', label: 'Notifications', desc: 'Reminders & alerts', tint: 'purple' },
+  { icon: 'brightness-6', label: 'Appearance', desc: 'Theme & display', tint: 'pink' },
+  { icon: 'volume-up', label: 'Sound & Haptics', desc: 'Audio preferences', tint: 'mint' },
+  { icon: 'security', label: 'Privacy', desc: 'Data & security', tint: 'blue' },
 ];
 
 const Profile = () => {
@@ -73,12 +82,15 @@ const Profile = () => {
   };
 
   return (
-    // CHANGED: pastel gradient backdrop + transparent scroll, matching Home.
+    // Pastel gradient backdrop + transparent scroll, matching Home & Journal.
     <View style={{ flex: 1 }}>
       <ScreenGradientBackground />
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: insets.top + theme.spacing.md }]} showsVerticalScrollIndicator={false}>
         <View style={styles.profileHeader}>
-          {/* CHANGED: glossy gradient avatar with a soft top-left sheen (was a flat lavender circle) */}
+          {/* Glossy gradient avatar with a soft top-left sheen — a one-off,
+              same "hero" gradient + sheen recipe SoftHeroCard uses internally,
+              just built by hand here since it needs to render initials text
+              inside a circle rather than a card. */}
           <View style={styles.avatarShadow}>
             <LinearGradient
               colors={[pastel.heroPink, pastel.heroPurple, pastel.heroBlue]}
@@ -99,18 +111,30 @@ const Profile = () => {
             { label: 'Days Active', value: '12' },
             { label: 'Entries', value: '8' },
             { label: 'Streak 🔥', value: '5' },
-          ].map((stat) => (
-            // CHANGED: glass stat tiles (marginBottom:0 so the row controls spacing)
-            <GlassCard key={stat.label} glow="purple" radius={18} style={styles.statCard}>
+          ].map((stat, i) => (
+            // CHANGED: added `fill` — SoftCard's default fill is translucent
+            // white meant to let the page gradient bleed through it. These
+            // tiles sit close together over a fairly pale patch of the page
+            // gradient, so the translucency wasn't reading as "glass," just
+            // flat pale gray. A baked-in lavender tint (same idea as the hero
+            // cards' baked-in color) fixes it regardless of what's behind it.
+            <SoftCard
+              key={stat.label}
+              seed={20 + i}
+              sparkleCount={2}
+              radius={18}
+              fill={['rgba(199,168,242,0.55)', 'rgba(255,255,255,0.42)']}
+              style={styles.statCard}
+            >
               <View style={{ alignItems: 'center' }}>
                 <Text style={styles.statValue}>{stat.value}</Text>
                 <Text style={styles.statLabel}>{stat.label}</Text>
               </View>
-            </GlassCard>
+            </SoftCard>
           ))}
         </View>
 
-        <GlassCard glow="purple">
+        <SoftCard seed={13} sparkleCount={3} fill={['rgba(199,168,242,0.42)', 'rgba(255,255,255,0.42)']}>
           <Text style={styles.sectionTitle}>This Week</Text>
           <View style={styles.weekStats}>
             {[
@@ -119,24 +143,24 @@ const Profile = () => {
               { icon: 'weather-windy', label: 'Breathe sessions', val: 3 },
             ].map((s) => (
               <View key={s.label} style={styles.weekStatRow}>
-                <GlossyCircle size={32} backgroundColor="rgba(156,123,234,0.26)" style={{ borderRadius: 10 }}>
-                  <MaterialCommunityIcons name={s.icon} size={16} color={pastel.purpleDeep} />
-                </GlossyCircle>
+                <SoftIcon size={32} radius={10} tint="lavender">
+                  <MaterialCommunityIcons name={s.icon} size={16} color="#fff" />
+                </SoftIcon>
                 <Text style={styles.weekStatLabel}>{s.label}</Text>
                 <Text style={styles.weekStatVal}>{s.val}</Text>
               </View>
             ))}
           </View>
-        </GlassCard>
+        </SoftCard>
 
         <Text style={styles.sectionTitle}>Settings</Text>
 
         {/* Daily Affirmation */}
-        <GlassCard glow="purple">
+        <SoftCard seed={15} sparkleCount={3} fill={['rgba(199,168,242,0.42)', 'rgba(255,255,255,0.42)']}>
           <View style={styles.affHeaderRow}>
-            <GlossyCircle size={36} backgroundColor="rgba(156,123,234,0.26)" style={{ borderRadius: 12 }}>
-              <MaterialCommunityIcons name="white-balance-sunny" size={18} color={pastel.purpleDeep} />
-            </GlossyCircle>
+            <SoftIcon size={36} radius={12} tint="purple">
+              <MaterialCommunityIcons name="white-balance-sunny" size={18} color="#fff" />
+            </SoftIcon>
             <View style={{ flex: 1 }}>
               <Text style={styles.settingLabel}>Daily Affirmation</Text>
               <Text style={styles.settingDesc}>A kind note, once a day</Text>
@@ -181,18 +205,18 @@ const Profile = () => {
               </View>
             </View>
           )}
-        </GlassCard>
+        </SoftCard>
 
-        <GlassCard glow="purple">
+        <SoftCard seed={19} sparkleCount={3} fill={['rgba(199,168,242,0.42)', 'rgba(255,255,255,0.42)']}>
           {SETTINGS.map((item, i) => (
             <TouchableOpacity
               key={item.label}
               style={[styles.settingRow, i < SETTINGS.length - 1 && styles.settingDivider]}
               activeOpacity={0.7}
             >
-              <GlossyCircle size={36} backgroundColor="rgba(156,123,234,0.26)" style={{ borderRadius: 12 }}>
-                <MaterialIcons name={item.icon} size={18} color={pastel.purpleDeep} />
-              </GlossyCircle>
+              <SoftIcon size={36} radius={12} tint={item.tint}>
+                <MaterialIcons name={item.icon} size={18} color="#fff" />
+              </SoftIcon>
               <View style={{ flex: 1 }}>
                 <Text style={styles.settingLabel}>{item.label}</Text>
                 <Text style={styles.settingDesc}>{item.desc}</Text>
@@ -200,9 +224,11 @@ const Profile = () => {
               <MaterialIcons name="chevron-right" size={18} color={pastel.textMuted} />
             </TouchableOpacity>
           ))}
-        </GlassCard>
+        </SoftCard>
 
-        {/* CHANGED: sign-out is a soft rose glass button instead of a flat red block */}
+        {/* Sign-out stays a soft rose glass button — same recipe as Journal's
+            "Delete entry" affordance, so destructive actions read the same
+            across tabs instead of each screen inventing its own red. */}
         <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut} activeOpacity={0.8}>
           <MaterialIcons name="logout" size={18} color={pastel.rose} />
           <Text style={styles.signOutText}>Sign Out</Text>
@@ -214,7 +240,6 @@ const Profile = () => {
   );
 };
 
-// CHANGED: recolored to the pastel-glass system.
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: 'transparent' },
   content: { padding: theme.spacing.md, paddingBottom: 100 },

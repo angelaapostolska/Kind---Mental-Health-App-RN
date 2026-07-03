@@ -42,9 +42,9 @@ export const pastel = {
   heroBlue: '#5FA0EE',
 
   // tier 2 — page background, clearly colorful, one notch softer than the hero tier.
-  bgTop: '#FFB3D1',
-  bgMid: '#CDAEF2',
-  bgBottom: '#A6C9F7',
+  bgTop: '#F9C9E3',
+  bgMid: '#E0C6F5',
+  bgBottom: '#C9D9F9',
 
   // CHANGED: light gradient for the floating tab bar — lighter than the page
   // background (so it still reads as a distinct "chrome" element, like a pale

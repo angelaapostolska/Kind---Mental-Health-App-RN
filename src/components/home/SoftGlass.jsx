@@ -46,11 +46,15 @@ const rng = (seed) => {
 const Sparkles = ({ seed = 1, count = 4, dim }) => {
   const items = React.useMemo(() => {
     const r = rng(Math.imul(seed, 2654435761));
-    return Array.from({ length: count }).map(() => ({
-      left: 8 + r() * 82,     // %
-      top: 6 + r() * 58,      // %
-      size: 7 + Math.round(r() * 7),
-      opacity: (dim ? 0.35 : 0.5) + r() * 0.35,
+    // CHANGED: one sparkle per horizontal band (+ jitter) so they can't bunch up
+    // together, with a taller vertical spread → reads as a more random scatter.
+    const bandW = 88 / count;
+    return Array.from({ length: count }).map((_, i) => ({
+      left: 6 + i * bandW + r() * bandW * 0.65,   // %  — spread across the width
+      top: 6 + r() * 70,                          // %  — taller vertical range (was 58)
+      // CHANGED: smaller overall + smaller minimum (was min 7 / max 14).
+      size: 4 + Math.round(r() * 4),              // min 4, max 8
+      opacity: (dim ? 0.3 : 0.45) + r() * 0.3,
     }));
   }, [seed, count, dim]);
 
