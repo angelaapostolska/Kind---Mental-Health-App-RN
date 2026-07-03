@@ -144,8 +144,9 @@ const Home = () => {
           <Text style={styles.affirmationText}>{affirmation}</Text>
         </SoftHeroCard>
 
-        {/* Mood picker */}
-        <SoftHeroCard colors={[pastel.heroPink, pastel.heroPurple, pastel.heroBlue]} seed={3} sparkleCount={4}>
+        {/* Mood picker — CHANGED: lighter / more pastel gradient (was the vivid hero
+            tier, too saturated). Affirmation card above intentionally left unchanged. */}
+        <SoftHeroCard colors={[pastel.pink, pastel.purple, pastel.blue]} seed={3} sparkleCount={4}>
           <MoodSlider onChange={handleMoodSelect} saving={savingMood} light />
         </SoftHeroCard>
 
