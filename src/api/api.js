@@ -40,7 +40,7 @@ const baseQueryWithBearer = async (args, api, extraOptions) => {
 export const cdtApi = createApi({
   reducerPath: 'cdtApi',
   baseQuery: baseQueryWithBearer,
-  tagTypes: ['User', 'MoodEntry', 'JournalEntry', 'JournalPrompt', 'Emotion', 'MoodFactor', 'Habit', 'HabitLog'],
+  tagTypes: ['User', 'MoodEntry', 'JournalEntry', 'JournalPrompt', 'Emotion', 'MoodFactor', 'Habit', 'HabitLog', 'Insight'],
   endpoints: (builder) => ({
     // --- User ---
     getUserByEmail: builder.query({
@@ -159,6 +159,13 @@ export const cdtApi = createApi({
       ],
     }),
 
+    // --- Insights ---
+    getInsightToday: builder.query({
+      query: () => 'api/insights/today',
+      providesTags: ['Insight'],
+      keepUnusedDataFor: 0,
+    }),
+
     // --- Habit Daily Logs ---
     // The backend returns the HabitDailyLog object directly when a log exists,
     // or an Optional that Spring serialises as an empty 200 body when it doesn't.
@@ -190,6 +197,7 @@ export const cdtApi = createApi({
 });
 
 export const {
+  useGetInsightTodayQuery,
   useGetUserByEmailQuery,
   useUpdateUserMutation,
   useGetMoodEntriesQuery,
