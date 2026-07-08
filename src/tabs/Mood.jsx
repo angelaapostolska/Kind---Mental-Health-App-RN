@@ -1,12 +1,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, TextInput, Modal, Animated } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Swipeable } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
-// CHANGED: pull in the shared pastel-glass design system (same one the Home screen
-// uses) so this tab matches the reference instead of the old flat white cards.
-import { ScreenGradientBackground, GlassCard, GradientButton, pastel } from '@/components';
+// CHANGED: using SoftGlass directly (SoftCard / SoftHeroCard / SoftIcon) —
+// the same bubbly/glossy system Home uses — for every glass-like element on
+// this screen: cards, mood-selection circles, feeling/factor chips, tabs, the
+// entry rows, and the delete-confirm icon.
+import { ScreenGradientBackground, GradientButton, pastel } from '@/components';
+import { SoftCard, SoftIcon } from '@/components/home/SoftGlass';
 import { MOOD_LEVELS, moodColor, moodLabel, moodEmoji, showErrorToast, showSuccessToast, isoDate } from '@/utils';
 import { useAppSelector } from '@/store/store';
 import MoodInsightCard from '@/components/mood/MoodInsightCard';
@@ -46,7 +50,6 @@ const dayHeader = (iso) => {
 const DayMoodCell = ({ day, levels }) => {
   if (!levels || levels.length === 0) {
     return (
-      // CHANGED: empty day is now a translucent white tile (was opaque grey surface.three)
       <View style={[styles.calDay, { backgroundColor: 'rgba(255,255,255,0.32)' }]}>
         <Text style={[styles.calDayText, { color: pastel.textMuted }]}>{day}</Text>
       </View>
@@ -100,6 +103,36 @@ const DayMoodCell = ({ day, levels }) => {
   );
 };
 
+// ── Glossy pill — shared recipe for tabs and chips: gradient fill + diagonal
+// sheen + white border when active, frosted translucent fill when inactive.
+// Same recipe as the Breathe screen's exercise pills.
+const GlossyPill = ({ label, active, onPress, style, textStyle, radius = 20 }) => (
+  <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={[style, active && { borderColor: 'transparent' }]}>
+    {active && (
+      <>
+        <LinearGradient
+          colors={[pastel.heroPurple, pastel.heroPink]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={[StyleSheet.absoluteFillObject, { borderRadius: radius }]}
+        />
+        <LinearGradient
+          colors={['rgba(255,255,255,0.5)', 'rgba(255,255,255,0)']}
+          start={{ x: 0.1, y: 0 }} end={{ x: 0.5, y: 0.65 }}
+          style={[StyleSheet.absoluteFillObject, { borderRadius: radius }]}
+          pointerEvents="none"
+        />
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFillObject, { borderRadius: radius, borderWidth: 1.4, borderColor: 'rgba(255,255,255,0.82)' }]}
+        />
+      </>
+    )}
+    <Text style={[textStyle, active && { color: '#fff' }]}>{label}</Text>
+  </TouchableOpacity>
+);
+
+// CHANGED: entry row is now a SoftCard (noPad) with a SoftIcon emoji badge —
+// same pattern as Home's meditation entry-point row.
 const MoodEntryRow = ({ entry, onRequestDelete }) => {
   const swipeRef = useRef(null);
   const level = moodValueToLevel(entry.moodValue);
@@ -129,25 +162,26 @@ const MoodEntryRow = ({ entry, onRequestDelete }) => {
 
   const emotions = entry.selectedEmotions ? [...entry.selectedEmotions] : [];
   const factors = entry.selectedFactors ? [...entry.selectedFactors] : [];
+  const seed = Number(entry.id) || 1;
 
   return (
     <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
-      {/* CHANGED: entry row is now a translucent glass tile (kept as a plain View so
-          the Swipeable's delete-action geometry stays aligned). */}
-      <View style={styles.entryCard}>
-        <View style={[styles.entryEmojiCircle, { backgroundColor: moodColor(level) }]}>
-          <Text style={styles.entryEmoji}>{moodEmoji(level)}</Text>
+      <SoftCard noPad seed={seed} sparkleCount={2} style={styles.entryCard}>
+        <View style={styles.entryRow}>
+          <SoftIcon size={42} radius={13} baseColor={moodColor(level)}>
+            <Text style={styles.entryEmoji}>{moodEmoji(level)}</Text>
+          </SoftIcon>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.entryMoodLabel}>{moodLabel(level)}</Text>
+            {(emotions.length > 0 || factors.length > 0) && (
+              <Text style={styles.entryMeta} numberOfLines={1}>
+                {[...emotions.map((e) => e.name), ...factors.map((f) => f.name)].join(' · ')}
+              </Text>
+            )}
+            {!!entry.note && <Text style={styles.entryNote}>{entry.note}</Text>}
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.entryMoodLabel}>{moodLabel(level)}</Text>
-          {(emotions.length > 0 || factors.length > 0) && (
-            <Text style={styles.entryMeta} numberOfLines={1}>
-              {[...emotions.map((e) => e.name), ...factors.map((f) => f.name)].join(' · ')}
-            </Text>
-          )}
-          {!!entry.note && <Text style={styles.entryNote}>{entry.note}</Text>}
-        </View>
-      </View>
+      </SoftCard>
     </Swipeable>
   );
 };
@@ -227,7 +261,9 @@ const Mood = () => {
   };
 
   const daysIn = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
-  const firstDow = new Date(month.getFullYear(), month.getMonth(), 1).getDay();
+  // CHANGED: getDay() returns Sunday=0..Saturday=6; remapped so the week
+  // (and the leading blank cells) starts on Monday instead.
+  const firstDow = (new Date(month.getFullYear(), month.getMonth(), 1).getDay() + 6) % 7;
   const monthName = month.toLocaleString('default', { month: 'long', year: 'numeric' });
 
   const ds = (day) =>
@@ -252,46 +288,54 @@ const Mood = () => {
   ).sort((a, b) => (a.date < b.date ? 1 : -1));
 
   return (
-    // CHANGED: dreamy pastel gradient behind a transparent scroll, mirroring Home.
     <View style={{ flex: 1 }}>
       <ScreenGradientBackground />
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: insets.top + theme.spacing.md }]} showsVerticalScrollIndicator={false}>
         <Text style={styles.pageTitle}>Mood</Text>
 
-        {/* CHANGED: segmented control restyled as a frosted glass pill with a soft
-            translucent-lavender active segment (matching the Home tab's active pill). */}
+        {/* CHANGED: tabs are now glossy pills (gradient + sheen + border when active) */}
         <View style={styles.tabRow}>
           {(['track', 'insights']).map((t) => (
-            <TouchableOpacity key={t} onPress={() => setTab(t)} style={[styles.tabBtn, tab === t && styles.tabBtnActive]} activeOpacity={0.8}>
-              <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-                {t === 'track' ? 'Track' : 'Insights'}
-              </Text>
-            </TouchableOpacity>
+            <GlossyPill
+              key={t}
+              label={t === 'track' ? 'Track' : 'Insights'}
+              active={tab === t}
+              onPress={() => setTab(t)}
+              style={styles.tabBtn}
+              textStyle={styles.tabText}
+              radius={999}
+            />
           ))}
         </View>
 
         {tab === 'track' && (
           <>
             {done ? (
-              <GlassCard glow="purple">
+              <SoftCard seed={13} sparkleCount={3}>
                 <View style={styles.centered}>
-                  <View style={[styles.doneBadge, { backgroundColor: mood ? moodColor(mood) : '#9b9b9b' }]}>
+                  <SoftIcon size={64} radius={32} baseColor={mood ? moodColor(mood) : '#9b9b9b'} style={{ marginBottom: theme.spacing.sm }}>
                     <MaterialIcons name="check" size={28} color="#fff" />
-                  </View>
+                  </SoftIcon>
                   <Text style={styles.doneTitle}>Mood logged</Text>
                   <Text style={styles.doneSub}>
                     {mood && moodLabel(mood)} · {feeling?.name} · {factor?.name}
                   </Text>
-                  {/* CHANGED: shared gradient pill button */}
                   <GradientButton label="Log another" small onPress={reset} style={{ marginTop: theme.spacing.md }} />
                 </View>
-              </GlassCard>
+              </SoftCard>
             ) : (
-              <GlassCard glow="purple">
+              <SoftCard seed={17} sparkleCount={4}>
                 <View style={styles.progressRow}>
                   {[1, 2, 3].map((s) => (
-                    // CHANGED: filled step → deep purple, empty → translucent white
-                    <View key={s} style={[styles.progressBar, s <= step && { backgroundColor: pastel.purpleDeep }]} />
+                    <View key={s} style={styles.progressBar}>
+                      {s <= step && (
+                        <LinearGradient
+                          colors={[pastel.heroPurple, pastel.heroPink]}
+                          start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                          style={StyleSheet.absoluteFillObject}
+                        />
+                      )}
+                    </View>
                   ))}
                 </View>
 
@@ -302,9 +346,16 @@ const Mood = () => {
                     <View style={styles.moodRow}>
                       {MOOD_LEVELS.map((m) => (
                         <TouchableOpacity key={m.level} onPress={() => { setMood(m.level); setFeeling(null); }} style={styles.moodBtn}>
-                          <View style={[styles.moodCircle, { backgroundColor: m.color }, mood === m.level && styles.moodCircleActive]}>
+                          {/* CHANGED: was a flat colored View — now a SoftIcon bubble
+                              (two-tone gradient, colored shadow, glossy highlight) */}
+                          <SoftIcon
+                            size={52}
+                            radius={16}
+                            baseColor={m.color}
+                            style={mood === m.level ? styles.moodCircleActive : null}
+                          >
                             <Text style={styles.moodEmoji}>{m.emoji}</Text>
-                          </View>
+                          </SoftIcon>
                           <View style={styles.moodLabelBox}>
                             <Text style={styles.moodEmojiLabel} numberOfLines={2}>{m.label}</Text>
                           </View>
@@ -323,9 +374,14 @@ const Mood = () => {
                     ) : (
                       <View style={styles.chipsWrap}>
                         {emotions.map((f) => (
-                          <TouchableOpacity key={f.id} onPress={() => setFeeling(f)} style={[styles.chip, feeling?.id === f.id && styles.chipActive]}>
-                            <Text style={[styles.chipText, feeling?.id === f.id && styles.chipTextActive]}>{f.name}</Text>
-                          </TouchableOpacity>
+                          <GlossyPill
+                            key={f.id}
+                            label={f.name}
+                            active={feeling?.id === f.id}
+                            onPress={() => setFeeling(f)}
+                            style={styles.chip}
+                            textStyle={styles.chipText}
+                          />
                         ))}
                       </View>
                     )}
@@ -341,9 +397,14 @@ const Mood = () => {
                     ) : (
                       <View style={styles.chipsWrap}>
                         {moodFactors.map((f) => (
-                          <TouchableOpacity key={f.id} onPress={() => setFactor(f)} style={[styles.chip, factor?.id === f.id && styles.chipActive]}>
-                            <Text style={[styles.chipText, factor?.id === f.id && styles.chipTextActive]}>{f.name}</Text>
-                          </TouchableOpacity>
+                          <GlossyPill
+                            key={f.id}
+                            label={f.name}
+                            active={factor?.id === f.id}
+                            onPress={() => setFactor(f)}
+                            style={styles.chip}
+                            textStyle={styles.chipText}
+                          />
                         ))}
                       </View>
                     )}
@@ -367,7 +428,6 @@ const Mood = () => {
                       <Text style={styles.navBtnBackText}>Back</Text>
                     </TouchableOpacity>
                   )}
-                  {/* CHANGED: primary action is the shared gradient pill */}
                   <GradientButton
                     label={step === 3 ? 'Save mood' : 'Continue'}
                     loading={saving}
@@ -376,14 +436,18 @@ const Mood = () => {
                     style={{ flex: 2 }}
                   />
                 </View>
-              </GlassCard>
+              </SoftCard>
             )}
           </>
         )}
 
         {tab === 'insights' && (
           <>
-            <GlassCard glow="purple">
+            <SoftCard
+              seed={21}
+              sparkleCount={3}
+              fill={['rgba(199,168,242,0.62)', 'rgba(255,255,255,0.35)']}
+            >
               <View style={styles.calHeader}>
                 <TouchableOpacity onPress={() => setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))}>
                   <MaterialIcons name="chevron-left" size={22} color={pastel.textDeep} />
@@ -398,7 +462,7 @@ const Mood = () => {
                 <ActivityIndicator color={pastel.purpleDeep} style={{ marginVertical: theme.spacing.lg }} />
               ) : (
                 <View style={styles.calGrid}>
-                  {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
+                  {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
                     <Text key={i} style={styles.calWeekDay}>{d}</Text>
                   ))}
                   {Array.from({ length: firstDow }).map((_, i) => <View key={`e${i}`} style={styles.calCell} />)}
@@ -421,7 +485,7 @@ const Mood = () => {
                   </View>
                 ))}
               </View>
-            </GlassCard>
+            </SoftCard>
 
             <MoodInsightCard />
 
@@ -449,9 +513,10 @@ const Mood = () => {
         <Modal visible={!!pendingDelete} transparent animationType="fade" onRequestClose={() => setPendingDelete(null)}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalCard}>
-              <View style={styles.modalIcon}>
-                <MaterialIcons name="delete-outline" size={26} color={pastel.rose} />
-              </View>
+              {/* CHANGED: was a flat rose circle — now a glossy SoftIcon bubble */}
+              <SoftIcon size={56} radius={28} baseColor={pastel.rose} style={{ marginBottom: theme.spacing.sm }}>
+                <MaterialIcons name="delete-outline" size={26} color="#fff" />
+              </SoftIcon>
               <Text style={styles.modalTitle}>Delete mood entry?</Text>
               <Text style={styles.modalSub}>This will permanently remove this entry. This action can't be undone.</Text>
               <View style={styles.modalBtnRow}>
@@ -470,39 +535,36 @@ const Mood = () => {
   );
 };
 
-// CHANGED: entire stylesheet recolored to the pastel-glass system —
-// translucent fills, dreamy text colors (textDeep / textMuted), soft purple glows.
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: 'transparent' },
   content: { padding: theme.spacing.md, paddingBottom: 100 },
   pageTitle: { fontSize: theme.typography.fontSize.heading.md, fontWeight: '800', color: pastel.textDeep, marginBottom: theme.spacing.md },
-  // segmented control — frosted pill
-  tabRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 22, padding: 5, marginBottom: theme.spacing.md, borderWidth: 1, borderColor: pastel.glassBorder },
-  tabBtn: { flex: 1, paddingVertical: 9, borderRadius: 16, alignItems: 'center' },
-  tabBtnActive: { backgroundColor: 'rgba(183,156,242,0.45)' },
+  tabRow: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 22, padding: 5, marginBottom: theme.spacing.md, borderWidth: 1, borderColor: pastel.glassBorder, gap: 5 },
+  tabBtn: { flex: 1, paddingVertical: 9, borderRadius: 16, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   tabText: { fontSize: 12, fontWeight: '700', color: pastel.textMuted },
-  tabTextActive: { color: pastel.textDeep },
   centered: { alignItems: 'center' },
-  doneBadge: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', marginBottom: theme.spacing.sm },
   doneTitle: { fontSize: 18, fontWeight: '800', color: pastel.textDeep },
   doneSub: { fontSize: 12, color: pastel.textMuted, marginTop: 4, textAlign: 'center' },
   progressRow: { flexDirection: 'row', gap: 6, marginBottom: theme.spacing.md },
-  progressBar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.5)' },
+  progressBar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.5)', overflow: 'hidden' },
   stepTitle: { fontSize: 14, fontWeight: '700', color: pastel.textDeep },
   stepSub: { fontSize: 12, color: pastel.textMuted, marginBottom: theme.spacing.md },
   moodRow: { flexDirection: 'row', justifyContent: 'space-between' },
   moodBtn: { alignItems: 'center', gap: 6 },
-  moodCircle: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  // CHANGED: active selection ring is now a soft white halo (was a hard black ring)
-  moodCircleActive: { borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)', transform: [{ scale: 1.1 }] },
+  // CHANGED: active ring is now applied on top of the SoftIcon bubble itself
+  moodCircleActive: { borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)', transform: [{ scale: 1.1 }],borderRadius:20 },
   moodEmoji: { fontSize: 24 },
   moodLabelBox: { width: 62, height: 28, alignItems: 'center', justifyContent: 'center' },
   moodEmojiLabel: { fontSize: 11, fontWeight: '600', color: pastel.textMuted, textAlign: 'center' },
   chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.5)', borderWidth: 1, borderColor: pastel.glassBorder },
-  chipActive: { backgroundColor: pastel.purpleDeep, borderColor: pastel.purpleDeep },
+  // CHANGED: base (inactive) chip is a frosted pill; GlossyPill layers the
+  // gradient + sheen + border on top only when active
+  chip: {
+    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.5)', borderWidth: 1, borderColor: pastel.glassBorder,
+    overflow: 'hidden',
+  },
   chipText: { fontSize: 12, fontWeight: '600', color: pastel.textDeep },
-  chipTextActive: { color: '#fff' },
   noteInput: {
     minHeight: 90, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.5)',
     borderWidth: 1, borderColor: pastel.glassBorder,
@@ -517,7 +579,10 @@ const styles = StyleSheet.create({
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   calWeekDay: { width: '14.28%', textAlign: 'center', fontSize: 10, fontWeight: '700', color: pastel.textMuted, paddingVertical: 4 },
   calCell: { width: '14.28%', aspectRatio: 1, padding: 1 },
-  calDay: { flex: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  calDay: {
+    flex: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)',
+  },
   calDayText: { fontSize: 11, fontWeight: '700' },
   legend: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginTop: theme.spacing.sm },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -528,14 +593,8 @@ const styles = StyleSheet.create({
   emptyEntriesText: { fontSize: 12, color: pastel.textMuted, fontWeight: '600' },
   daySection: { marginBottom: theme.spacing.md },
   dayLabel: { fontSize: 11, fontWeight: '700', color: pastel.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
-  // glassy entry tile
-  entryCard: {
-    flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 16, padding: theme.spacing.md, marginBottom: 8,
-    borderWidth: 1, borderColor: pastel.glassBorder,
-    shadowColor: pastel.purpleDeep, shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2,
-  },
-  entryEmojiCircle: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  entryCard: { marginBottom: 8 },
+  entryRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, padding: 16 },
   entryEmoji: { fontSize: 20 },
   entryMoodLabel: { fontSize: 13, fontWeight: '700', color: pastel.textDeep },
   entryMeta: { fontSize: 11, color: pastel.textMuted, marginTop: 2 },
@@ -546,9 +605,7 @@ const styles = StyleSheet.create({
   },
   deleteActionText: { color: '#fff', fontSize: 11, fontWeight: '700', marginTop: 2 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(74,46,122,0.35)', justifyContent: 'center', alignItems: 'center', padding: theme.spacing.lg },
-  // CHANGED: confirm dialog is a light lavender frosted card (not flat white)
   modalCard: { width: '100%', maxWidth: 360, backgroundColor: '#FBF7FF', borderRadius: 24, padding: theme.spacing.lg, alignItems: 'center', borderWidth: 1, borderColor: pastel.glassBorder },
-  modalIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: pastel.roseSoft, alignItems: 'center', justifyContent: 'center', marginBottom: theme.spacing.sm },
   modalTitle: { fontSize: 17, fontWeight: '800', color: pastel.textDeep, marginBottom: 6, textAlign: 'center' },
   modalSub: { fontSize: 12, color: pastel.textMuted, textAlign: 'center', marginBottom: theme.spacing.md, lineHeight: 18 },
   modalBtnRow: { flexDirection: 'row', gap: theme.spacing.sm, width: '100%' },

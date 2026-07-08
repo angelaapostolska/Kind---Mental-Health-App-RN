@@ -27,28 +27,51 @@ const ICONS = {
 // CHANGED: 'Breathe' is the visible label for the Resources route.
 const LABELS = { Home: 'Home', Mood: 'Mood', Journal: 'Journal', Resources: 'Breathe', Profile: 'Profile' };
 
-// CHANGED: glossy pill that sits behind the ACTIVE tab — same recipe as the glass
-// cards / clay icons (tinted fill → top-left reflection sheen → white edge), instead
-// of React Navigation's flat `tabBarActiveBackgroundColor` rectangle. Rendered as an
-// absolute fill so the icon+label (with their own padding) define the pill's size.
+// CHANGED: pulled the top-rim streak and side specular streak back out —
+// those were the "weird white line on top" / "fuzzy white line on the left"
+// artifacts. Kept the base fill, soft reflection fade, and border, which
+// still reads as glossy without the two extra streaks causing visible seams.
 const ActivePill = () => (
-  <View style={StyleSheet.absoluteFill} pointerEvents="none">
-    <LinearGradient
-      colors={['rgba(255,255,255,0.92)', 'rgba(199,168,242,0.55)']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[StyleSheet.absoluteFillObject, styles.pill]}
-    />
-    {/* reflection — bright top-left, fading out */}
-    <LinearGradient
-      colors={['rgba(255,255,255,0.95)', 'rgba(255,255,255,0)']}
-      start={{ x: 0.1, y: 0 }}
-      end={{ x: 0.6, y: 0.9 }}
-      style={[StyleSheet.absoluteFillObject, styles.pill]}
-    />
-    {/* glossy white border */}
-    <View style={[StyleSheet.absoluteFillObject, styles.pillBorder]} />
-  </View>
+  <>
+    <View style={[StyleSheet.absoluteFill, styles.pillShadow]} pointerEvents="none" />
+    <View style={[StyleSheet.absoluteFill, styles.pill]} pointerEvents="none">
+      {/* body fill — solid purple, CHANGED: darker top (#9C7BEA, purpleDeep)
+          fading to the same light lavender bottom, for a stronger dark→light read */}
+      <LinearGradient
+        colors={['#9C7BEA', '#DECEF9']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      {/* soft overall reflection fade, top-heavy */}
+      <LinearGradient
+        colors={['rgba(255,255,255,0.55)', 'rgba(255,255,255,0)']}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 0.55 }}
+        style={StyleSheet.absoluteFillObject}
+      />
+      {/* small white petal-style highlight, diagonal fade to transparent,
+          sitting inside the pill's top-left corner */}
+      <LinearGradient
+        colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0)']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0.4, y: 0.4 }}
+        style={styles.pillAccentCircle}
+        pointerEvents="none"
+      />
+      {/* mirrored highlight in the bottom-right corner — gradient starts at
+          that edge and fades to transparent heading toward the middle */}
+      <LinearGradient
+        colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0)']}
+        start={{ x: 1, y: 1 }}
+        end={{ x: 0.6, y: 0.6 }}
+        style={styles.pillAccentCircleBottomRight}
+        pointerEvents="none"
+      />
+      {/* glass edge */}
+      <View style={[StyleSheet.absoluteFillObject, styles.pillBorder]} />
+    </View>
+  </>
 );
 
 // CHANGED: fully custom bar so BOTH the bar and the active indicator get the glass
@@ -86,7 +109,7 @@ const GlassTabBar = ({ state, descriptors, navigation }) => {
           {state.routes.map((route, index) => {
             const focused = state.index === index;
             const tab = route.name;
-            const color = focused ? pastel.purpleDeep : pastel.textMuted;
+            const color = focused ? '#fff' : pastel.textMuted;
             const iconName = focused ? ICONS[tab].filled : ICONS[tab].outline;
 
             const onPress = () => {
@@ -104,12 +127,17 @@ const GlassTabBar = ({ state, descriptors, navigation }) => {
                 onLongPress={onLongPress}
                 style={styles.tab}
               >
-                {/* CHANGED: generous padding inside the item → clear distance between
-                    the icon/label and the edge of the active pill. */}
                 <View style={[styles.item, focused && styles.itemActive]}>
                   {focused && <ActivePill />}
                   <MaterialCommunityIcons name={iconName} size={22} color={color} />
-                  <Text style={[styles.label, { color }]} numberOfLines={1}>{LABELS[tab]}</Text>
+                  <Text
+                    style={[styles.label, { color }]}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.75}
+                  >
+                    {LABELS[tab]}
+                  </Text>
                 </View>
               </Pressable>
             );
@@ -134,8 +162,6 @@ const AppTabs = () => (
 );
 
 const styles = StyleSheet.create({
-  // CHANGED: wider again. The old bar stacked marginHorizontal:15 with left:40/right:40,
-  // squeezing it narrow. Now a single, modest side margin restores the width.
   barWrap: {
     position: 'absolute',
     left: 14,
@@ -144,7 +170,6 @@ const styles = StyleSheet.create({
   bar: {
     height: 68,
     borderRadius: 999,
-    // floating glow
     shadowColor: pastel.purpleDeep,
     shadowOpacity: 0.18,
     shadowRadius: 16,
@@ -165,26 +190,63 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  // CHANGED: the pill now wraps icon + label with real breathing room (10v / 14h)
-  // so there's space between the content and the indicator's edge.
+  // CHANGED: paddingTop reduced relative to paddingBottom so the icon+label
+  // sit a touch higher within the tab instead of feeling pushed toward the
+  // bottom edge.
   item: {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
-    paddingVertical: 8,
+    paddingTop: 5,
+    paddingBottom: 10,
     paddingHorizontal: 10,
     borderRadius: 999,
   },
+  // CHANGED: fixed width instead of content-hugging padding — every active
+  // pill is now the same size no matter which tab (short "Home" vs longer
+  // "Journal"/"Breathe"/"Profile"), and since all tabs stay equal flex:1,
+  // this fixed size never causes neighboring tabs to reflow.
   itemActive: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    overflow: 'hidden',
+    width: 74,
+    paddingTop: 5,
+    paddingBottom: 10,
   },
   pill: { borderRadius: 999, overflow: 'hidden' },
+  pillShadow: {
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    shadowColor: pastel.purpleDeep,
+    shadowOpacity: 0.28,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 7,
+  },
   pillBorder: {
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 1.3,
+    borderColor: 'rgba(255,255,255,0.95)',
+  },
+  // NEW: small white petal-style highlight sitting inside the pill's
+  // top-left corner (diagonal fade to transparent, same recipe as the
+  // Breathe screen's petals) — positive offsets keep it fully inside the pill.
+  pillAccentCircle: {
+    position: 'absolute',
+    top: 3,
+    left: 3,
+    width: 60,
+    height: 47,
+    borderRadius: 999,
+  },
+  // NEW: mirrored highlight anchored to the bottom-right corner instead —
+  // same size/shape, gradient direction flipped so it starts at that edge
+  // and fades toward the middle.
+  pillAccentCircleBottomRight: {
+    position: 'absolute',
+    bottom: 3,
+    right: 3,
+    width: 61,
+    height: 48,
+    borderRadius: 999,
   },
   label: { fontSize: 11, fontWeight: '700' },
 });
