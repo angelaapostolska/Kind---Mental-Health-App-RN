@@ -1,9 +1,8 @@
 import React from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useGetInsightTodayQuery } from '@/api/api';
-import { pastel } from '@/components';
+import { SoftHeroCard } from '@/components/home/SoftGlass';
 import { useAppSelector } from '@/store/store';
 
 // Maps rule-based signals to a plain-language mood word shown in the header line.
@@ -28,18 +27,23 @@ const moodWord = (trend, severity) => {
 const CARD_GRADIENT   = ['#FFCBA4', '#C8A5F5', '#8EC5FC'];
 const CRISIS_GRADIENT = ['#FFB8C6', '#E8A0BF', '#C48DD9'];
 
+// CHANGED: was a hand-rolled LinearGradient card with its own gloss blob,
+// reflection sheen, two fixed sparkles, and shadow. Now uses SoftHeroCard
+// directly — same component Home's affirmation/mood cards use — so this gets
+// the same seeded sparkle scatter, two-layer sheen, ring, and shadow depth
+// as everything else, instead of a separately hand-tuned approximation of it.
 const MoodInsightCard = () => {
   const userId = useAppSelector((state) => state.userState.userId);
   const { data, isLoading, isError } = useGetInsightTodayQuery(undefined, { skip: !userId });
 
   if (isLoading) {
     return (
-      <LinearGradient colors={CARD_GRADIENT} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.card}>
+      <SoftHeroCard colors={CARD_GRADIENT} radius={24} seed={31} sparkleCount={3} style={styles.cardMargin}>
         <View style={styles.loadingInner}>
           <ActivityIndicator color="#fff" size="small" />
           <Text style={styles.loadingText}>Getting your insight…</Text>
         </View>
-      </LinearGradient>
+      </SoftHeroCard>
     );
   }
 
@@ -51,40 +55,13 @@ const MoodInsightCard = () => {
   const word     = moodWord(trend, severity);
 
   return (
-    <LinearGradient
+    <SoftHeroCard
       colors={isCrisis ? CRISIS_GRADIENT : CARD_GRADIENT}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.card}
+      radius={24}
+      seed={isCrisis ? 33 : 31}
+      sparkleCount={4}
+      style={styles.cardMargin}
     >
-      {/* top-left gloss blob */}
-      <View style={styles.glossBlob} pointerEvents="none" />
-
-      {/* reflection sheen */}
-      <LinearGradient
-        colors={['rgba(255,255,255,0.45)', 'rgba(255,255,255,0)']}
-        start={{ x: 0.05, y: 0 }}
-        end={{ x: 0.55, y: 0.7 }}
-        style={[StyleSheet.absoluteFillObject, { borderRadius: 24 }]}
-        pointerEvents="none"
-      />
-
-      {/* sparkle accents */}
-      <MaterialCommunityIcons
-        name="star-four-points"
-        size={13}
-        color="#fff"
-        style={styles.sparkleTopRight}
-        pointerEvents="none"
-      />
-      <MaterialCommunityIcons
-        name="star-four-points"
-        size={9}
-        color="#fff"
-        style={styles.sparkleBottomRight}
-        pointerEvents="none"
-      />
-
       {/* ── Header ── */}
       <View style={styles.headerRow}>
         <Text style={styles.starEmoji}>✨</Text>
@@ -127,44 +104,15 @@ const MoodInsightCard = () => {
           <Text style={styles.badgeText}>✦ AI-powered</Text>
         </View>
       )}
-    </LinearGradient>
+    </SoftHeroCard>
   );
 };
 
 const styles = StyleSheet.create({
-  card: {
-    borderRadius: 24,
-    padding: 20,
-    marginBottom: 16,
-    overflow: 'hidden',
-    shadowColor: pastel.purpleDeep,
-    shadowOpacity: 0.28,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 6,
-  },
-  glossBlob: {
-    position: 'absolute',
-    top: -28,
-    left: -22,
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: 'rgba(255,255,255,1)',
-    opacity: 0.38,
-  },
-  sparkleTopRight: {
-    position: 'absolute',
-    top: 18,
-    right: 22,
-    opacity: 0.7,
-  },
-  sparkleBottomRight: {
-    position: 'absolute',
-    bottom: 26,
-    right: 44,
-    opacity: 0.5,
-  },
+  // CHANGED: SoftHeroCard owns its own marginBottom (18) — this just nudges
+  // it to line up with the rest of the screen's spacing (was 16 on the old
+  // hand-rolled card); harmless to leave as an extra style override.
+  cardMargin: { marginBottom: 16 },
   loadingInner: {
     flexDirection: 'row',
     alignItems: 'center',

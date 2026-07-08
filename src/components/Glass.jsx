@@ -42,7 +42,7 @@ export const pastel = {
   heroBlue: '#5FA0EE',
 
   // tier 2 — page background, clearly colorful, one notch softer than the hero tier.
-  bgTop: '#F9C9E3',
+  bgTop: '#DECEF9',
   bgMid: '#E0C6F5',
   bgBottom: '#C9D9F9',
 

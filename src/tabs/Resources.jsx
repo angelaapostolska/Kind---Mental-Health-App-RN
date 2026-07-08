@@ -22,6 +22,9 @@ const EXERCISES = [
       { label: 'Exhale', dur: 4 },
       { label: 'Hold',   dur: 4 },
     ],
+    // Petal colour palette — shifts per exercise
+    petalA: pastel.heroPurple,
+    petalB: '#C8A8FF',
   },
   {
     id: '478', name: '4-7-8', desc: 'Deep relaxation — quiets the nervous system',
@@ -32,15 +35,19 @@ const EXERCISES = [
       { label: 'Hold',   dur: 7 },
       { label: 'Exhale', dur: 8 },
     ],
+    petalA: pastel.heroPink,
+    petalB: '#FFB8D2',
   },
   {
     id: 'calm', name: 'Calm', desc: 'Soothing rhythm — perfect for anxiety',
-    emoji: '🌊', tint: 'mint',
+    emoji: '🌊', tint: 'blue',
     inhale: 4, hold: 0, exhale: 6, holdAfter: 0,
     steps: [
       { label: 'Inhale', dur: 4 },
       { label: 'Exhale', dur: 6 },
     ],
+    petalA: pastel.heroBlue,
+    petalB: '#A8D8FF',
   },
 ];
 
@@ -56,23 +63,258 @@ const PHASE_LABEL = {
   inhale: 'Inhale', hold: 'Hold', exhale: 'Exhale', holdAfter: 'Hold',
 };
 
-// Phase → colour used for the animated ring + step chip
-const PHASE_COLORS = {
-  inhale:    [pastel.heroPurple, pastel.heroPink],
-  hold:      [pastel.heroPink,   pastel.heroBlue],
-  exhale:    [pastel.heroBlue,   pastel.heroPurple],
-  holdAfter: [pastel.heroPurple, pastel.heroPink],
-};
-
 const TIPS = [
-  { icon: 'nose',                    text: 'Breathe through your nose for better results' },
-  { icon: 'human-handsdown',         text: 'Keep your shoulders relaxed and down' },
-  { icon: 'calendar-clock',          text: 'Practice at the same time each day' },
-  { icon: 'timer-outline',           text: 'Start with just 5 minutes per session' },
-  { icon: 'meditation',              text: 'Close your eyes to deepen focus' },
+  { icon: 'lungs',             text: 'Breathe through your nose for better results' },
+  { icon: 'human-handsdown',   text: 'Keep your shoulders relaxed and down' },
+  { icon: 'calendar-clock',    text: 'Practice at the same time each day' },
+  { icon: 'timer-outline',     text: 'Start with just 5 minutes per session' },
+  { icon: 'meditation',        text: 'Close your eyes to deepen focus' },
 ];
 
-// ── Glossy exercise selector pill ────────────────────────────────────────────
+// Number of petal pairs (matches Swift ForEach 0...2 = 3 pairs)
+const PETAL_SETS = 3;
+
+// ── Petal-flower breathing animation ────────────────────────────────────────
+//
+//  Mirrors the SwiftUI structure exactly:
+//    ForEach (0...2):
+//      ZStack:
+//        Circle  offset +Y  (rotates with ZStack)
+//        Circle  offset -Y  (rotates with ZStack)
+//      .rotationEffect( circleSetNumber * 60° )
+//      .scaleEffect( bloomed ? 1 : 0.2 )
+//
+//  React Native doesn't have a single "scale + rotate + offset" combo natively
+//  so we drive two Animated.Values — flowerScale (0.2 ↔ 1) and flowerRotate
+//  (0 ↔ 60°) — and map them onto each petal pair via inline transforms.
+//
+const PetalFlower = ({ running, phaseKey, exercise, countdown }) => {
+  const CIRCLE_D    = 120;              // diameter of each inner petal circle (px)
+  const OFFSET      = CIRCLE_D * 0.5;   // how far each inner circle is pushed from centre
+
+  // Outer ring — sized to match the footprint of the original ambient glow
+  // circle it replaced (~143px radius), just built from petals instead of a
+  // flat circle.
+  const OUTER_D      = 200;
+  const OUTER_OFFSET = 55;
+
+  // Container needs to fit the outer ring fully without clipping
+  const SIZE   = (OUTER_OFFSET + OUTER_D / 2) * 2 + 20;
+  const CENTRE = SIZE / 2;
+
+  // ── Single shared animation value: 0 = closed, 1 = open ──────────────────
+  const flowerAnim = useRef(new Animated.Value(0)).current;
+
+  // Single ref for whatever animation is currently in flight. Only one
+  // effect ever touches this now — that's what guarantees Stop (or switching
+  // exercises, which also sets running=false) truly kills the animation
+  // instead of a second effect silently restarting it.
+  const animRef = useRef(null);
+
+  // Map 0→1 to scale 0.18→1.0
+  const petalScale = flowerAnim.interpolate({
+    inputRange: [0, 1], outputRange: [0.18, 1.0],
+  });
+  // Rotation as NUMBERS (degrees) — never use string outputs if you need to
+  // chain another interpolation; React Native throws "not a number" otherwise.
+  const baseRotateDeg = flowerAnim.interpolate({
+    inputRange: [0, 1], outputRange: [0, 60],
+  });
+  // Inner petal opacity: fades up as petals open
+  const petalOpacity = flowerAnim.interpolate({
+    inputRange: [0, 0.3, 1], outputRange: [0.25, 0.45, 0.68],
+  });
+  // Outer petal opacity: same shape, much more transparent throughout
+  const outerOpacity = flowerAnim.interpolate({
+    inputRange: [0, 0.3, 1], outputRange: [0.08, 0.16, 0.28],
+  });
+
+  // ── Drive the animation speed from the current phase duration ─────────────
+  const isOpening = phaseKey === 'inhale' || phaseKey === 'hold';
+  const toValue   = isOpening ? 1 : 0;
+  const dur       = (() => {
+    if (phaseKey === 'inhale')    return exercise.inhale    * 1000;
+    if (phaseKey === 'hold')      return exercise.hold      * 1000;
+    if (phaseKey === 'exhale')    return exercise.exhale    * 1000;
+    if (phaseKey === 'holdAfter') return exercise.holdAfter * 1000;
+    return 3000;
+  })();
+
+  // Track whether this is the very first inhale after pressing Start
+  const isFirstRunRef = useRef(false);
+
+  // Mark the first inhale so it gets its lead-in delay, the instant a session starts
+  useEffect(() => {
+    if (running) isFirstRunRef.current = true;
+  }, [running]);
+
+  // ── Stop control: fires the instant running goes false — whether from the
+  // Stop button or from switching exercises. Kills whatever's in flight and
+  // settles the flower to a calm closed state; nothing loops afterward, so
+  // there's no way for the flower to keep moving once stopped.
+  useEffect(() => {
+    if (running) return;
+
+    if (animRef.current) { animRef.current.stop(); animRef.current = null; }
+    isFirstRunRef.current = false;
+
+    const settle = Animated.timing(flowerAnim, {
+      toValue: 0.2, duration: 280,
+      easing: Easing.out(Easing.ease), useNativeDriver: true,
+    });
+    animRef.current = settle;
+    settle.start();
+
+    return () => { settle.stop(); animRef.current = null; };
+  }, [running]);
+
+  // ── Phase driver: runs when phase changes while a session is active ───────
+  useEffect(() => {
+    if (!running) return; // stop control above owns the idle/settled state
+
+    if (animRef.current) { animRef.current.stop(); animRef.current = null; }
+
+    // HOLD phases: don't just freeze wherever the previous animation happened
+    // to land — ease smoothly into the fully open (hold) or fully closed
+    // (holdAfter) resting position so the transition feels soft, not abrupt.
+    if (phaseKey === 'hold' || phaseKey === 'holdAfter') {
+      const settle = Animated.timing(flowerAnim, {
+        toValue, duration: 400,
+        easing: Easing.out(Easing.cubic), useNativeDriver: true,
+      });
+      animRef.current = settle;
+      settle.start();
+      return () => { settle.stop(); animRef.current = null; };
+    }
+
+    // 1 s delay only on the very first inhale after pressing Start
+    const delay = isFirstRunRef.current ? 1000 : 0;
+    isFirstRunRef.current = false; // only applies once per start
+
+    let timeout = null;
+    timeout = setTimeout(() => {
+      const anim = Animated.timing(flowerAnim, {
+        toValue, duration: dur,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      });
+      animRef.current = anim;
+      anim.start();
+    }, delay);
+
+    return () => {
+      clearTimeout(timeout);
+      if (animRef.current) { animRef.current.stop(); animRef.current = null; }
+    };
+  }, [running, phaseKey, dur, toValue]);
+
+  // Per-set rotation: Animated.add(baseRotateDeg, staticOffset) keeps everything
+  // numeric, then a single interpolate maps number→'Xdeg' string at the leaf.
+  const setAngles = Array.from({ length: PETAL_SETS }, (_, i) => {
+    const staticOffset = i * (180 / PETAL_SETS);          // 0, 60, 120
+    const totalDeg = Animated.add(baseRotateDeg, staticOffset);
+    const rotateDeg = totalDeg.interpolate({
+      inputRange: [0, 360], outputRange: ['0deg', '360deg'],
+    });
+    return { staticOffset, rotateDeg };
+  });
+
+  const { petalA, petalB } = exercise;
+
+  return (
+    <View style={{ width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center', marginTop: theme.spacing.xs, marginBottom: 0 }}>
+
+      {/* Outer petal ring — bigger, much more transparent, replaces the old flat glow circle */}
+      {setAngles.map(({ rotateDeg }, idx) => (
+        <Animated.View
+          key={`outer-${idx}`}
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            width: SIZE, height: SIZE,
+            transform: [{ rotate: rotateDeg }, { scale: petalScale }],
+            opacity: outerOpacity,
+          }}
+        >
+          <LinearGradient
+            colors={[petalA + '55', petalB + '55']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={{
+              position: 'absolute',
+              width: OUTER_D, height: OUTER_D, borderRadius: OUTER_D / 2,
+              left: CENTRE - OUTER_D / 2,
+              top:  CENTRE - OUTER_D / 2 - OUTER_OFFSET,
+            }}
+          />
+          <LinearGradient
+            colors={[petalB + '55', petalA + '55']}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={{
+              position: 'absolute',
+              width: OUTER_D, height: OUTER_D, borderRadius: OUTER_D / 2,
+              left: CENTRE - OUTER_D / 2,
+              top:  CENTRE - OUTER_D / 2 + OUTER_OFFSET,
+            }}
+          />
+        </Animated.View>
+      ))}
+
+      {/* Inner petal pairs — each is a full-size absolute layer so children are never clipped */}
+      {setAngles.map(({ rotateDeg }, idx) => (
+        <Animated.View
+          key={idx}
+          style={{
+            position: 'absolute',
+            width: SIZE, height: SIZE,
+            transform: [{ rotate: rotateDeg }, { scale: petalScale }],
+            opacity: petalOpacity,
+          }}
+        >
+          {/* Top circle — centred in layer, shifted up by OFFSET */}
+          <LinearGradient
+            colors={[petalA, petalB]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={{
+              position: 'absolute',
+              width: CIRCLE_D, height: CIRCLE_D, borderRadius: CIRCLE_D / 2,
+              left: CENTRE - CIRCLE_D / 2,
+              top:  CENTRE - CIRCLE_D / 2 - OFFSET,
+            }}
+          />
+          {/* Bottom circle — shifted down by OFFSET */}
+          <LinearGradient
+            colors={[petalB, petalA]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={{
+              position: 'absolute',
+              width: CIRCLE_D, height: CIRCLE_D, borderRadius: CIRCLE_D / 2,
+              left: CENTRE - CIRCLE_D / 2,
+              top:  CENTRE - CIRCLE_D / 2 + OFFSET,
+            }}
+          />
+        </Animated.View>
+      ))}
+
+      {/* Floating phase label — sits over the flower, no white disc */}
+      <View style={styles.floatingLabel} pointerEvents="none">
+        {running ? (
+          <>
+            <Text style={[styles.floatingPhase, { color: '#fff' }]}>
+              {PHASE_LABEL[phaseKey]}
+            </Text>
+            <Text style={[styles.floatingTimer, { color: '#fff' }]}>{countdown}</Text>
+          </>
+        ) : null}
+      </View>
+    </View>
+  );
+};
+
+// ── Glossy exercise selector pill ───────────────────────────────────────────
 const ExercisePill = ({ ex, active, onPress }) => (
   <TouchableOpacity
     onPress={onPress}
@@ -81,28 +323,22 @@ const ExercisePill = ({ ex, active, onPress }) => (
   >
     {active && (
       <>
-        {/* Gradient fill */}
         <LinearGradient
-          colors={[pastel.heroPurple, pastel.heroPink]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          colors={[ex.petalA, ex.petalB]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
         />
-        {/* Top reflection */}
         <LinearGradient
           colors={['rgba(255,255,255,0.50)', 'rgba(255,255,255,0)']}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.5, y: 0.65 }}
+          start={{ x: 0.1, y: 0 }} end={{ x: 0.5, y: 0.65 }}
           style={[StyleSheet.absoluteFillObject, { borderRadius: 22 }]}
           pointerEvents="none"
         />
-        {/* White border glow */}
         <View
           pointerEvents="none"
           style={[StyleSheet.absoluteFillObject, {
-            borderRadius: 22,
-            borderWidth: 1.4,
-            borderColor: 'rgba(255,255,255,0.80)',
+            borderRadius: 22, borderWidth: 1.4,
+            borderColor: 'rgba(255,255,255,0.82)',
           }]}
         />
       </>
@@ -113,147 +349,40 @@ const ExercisePill = ({ ex, active, onPress }) => (
   </TouchableOpacity>
 );
 
-// ── Animated breathe orb ─────────────────────────────────────────────────────
-const BreatheOrb = ({ scaleAnim, phaseKey, running, countdown }) => {
-  const colors = PHASE_COLORS[phaseKey] || PHASE_COLORS.inhale;
-
+// ── Glossy step chip ─────────────────────────────────────────────────────────
+// The lighter rectangle was an Android shadow-rendering artifact: this app's
+// own SoftGlass.jsx works around the exact same bug by never putting
+// `elevation` and `overflow: 'hidden'` on the same view (see its `shadow` /
+// `clip` split). StepChip was doing both at once. Splitting it the same way
+// fixes it: outer view owns the shadow, inner view owns the rounded clip + fill.
+const StepChip = ({ label, active, exercise }) => {
+  const fillColor = active ? exercise.petalA : exercise.petalA + '26';
   return (
-    <View style={styles.orbContainer}>
-      {/* Soft outer glow halo */}
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          styles.orbHalo,
-          { transform: [{ scale: scaleAnim }], opacity: 0.22 },
-          { backgroundColor: colors[0] },
-        ]}
-      />
-
-      {/* Outer animated ring — glossy gradient */}
-      <Animated.View style={[styles.orbRingWrap, { transform: [{ scale: scaleAnim }] }]}>
-        <LinearGradient
-          colors={[colors[0] + 'CC', colors[1] + '99']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.orbRingGradient}
-        />
-        {/* Ring glass sheen */}
-        <LinearGradient
-          colors={['rgba(255,255,255,0.38)', 'rgba(255,255,255,0)']}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 0.5 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 90 }]}
-          pointerEvents="none"
-        />
-        {/* White border */}
+    <View
+      style={[
+        styles.stepChipShadow,
+        {
+          backgroundColor: fillColor,
+          shadowColor: exercise.petalA,
+          shadowOpacity: active ? 0.5 : 0.22,
+          shadowRadius: active ? 14 : 7,
+          elevation: active ? 8 : 4,
+        },
+      ]}
+    >
+      <View style={[styles.stepChipClip, { backgroundColor: fillColor }]}>
+        {/* thin glassy ring for the bubbly edge — no fill overlay of any kind */}
         <View
           pointerEvents="none"
-          style={[StyleSheet.absoluteFillObject, {
-            borderRadius: 90,
-            borderWidth: 1.5,
-            borderColor: 'rgba(255,255,255,0.70)',
-          }]}
+          style={[styles.stepChipRing, active && styles.stepChipRingActive]}
         />
-      </Animated.View>
-
-      {/* Inner ring — smaller, lighter */}
-      <Animated.View
-        style={[
-          styles.orbInnerRing,
-          {
-            transform: [{ scale: Animated.multiply(scaleAnim, 0.68) }],
-            backgroundColor: colors[1] + '88',
-          },
-        ]}
-      />
-
-      {/* Centre glossy disc */}
-      <View style={styles.orbCentre}>
-        {/* Disc frosted fill */}
-        <LinearGradient
-          colors={['rgba(255,255,255,0.96)', 'rgba(245,240,255,0.92)']}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 54 }]}
-        />
-        {/* Top reflection */}
-        <LinearGradient
-          colors={['rgba(255,255,255,0.70)', 'rgba(255,255,255,0)']}
-          start={{ x: 0.5, y: 0 }}
-          end={{ x: 0.5, y: 0.5 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 54 }]}
-          pointerEvents="none"
-        />
-        {/* White border ring */}
-        <View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFillObject, {
-            borderRadius: 54,
-            borderWidth: 1.5,
-            borderColor: 'rgba(255,255,255,0.90)',
-          }]}
-        />
-        {/* Shadow from disc on ring */}
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute', width: 108, height: 108, borderRadius: 54,
-            shadowColor: colors[0], shadowOpacity: 0.3,
-            shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-          }}
-        />
-
-        {/* Label */}
-        <Text style={[styles.orbPhaseText, { color: colors[0] }]}>
-          {running ? PHASE_LABEL[phaseKey] : 'Ready'}
-        </Text>
-        {running && (
-          <Text style={[styles.orbTimer, { color: colors[0] }]}>{countdown}</Text>
-        )}
-        {!running && (
-          <MaterialCommunityIcons
-            name="play-circle-outline"
-            size={20}
-            color={pastel.purpleDeep + '88'}
-            style={{ marginTop: 4 }}
-          />
-        )}
+        <Text style={[styles.stepChipText, active && { color: '#fff' }]}>{label}</Text>
       </View>
     </View>
   );
 };
 
-// ── Step chip — glossy when active ───────────────────────────────────────────
-const StepChip = ({ label, active }) => (
-  <View style={[styles.stepChip, active && { borderColor: 'transparent', overflow: 'hidden' }]}>
-    {active && (
-      <>
-        <LinearGradient
-          colors={[pastel.heroPurple, pastel.heroPink]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-        />
-        <LinearGradient
-          colors={['rgba(255,255,255,0.42)', 'rgba(255,255,255,0)']}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.5, y: 0.65 }}
-          style={[StyleSheet.absoluteFillObject, { borderRadius: 14 }]}
-          pointerEvents="none"
-        />
-        <View
-          pointerEvents="none"
-          style={[StyleSheet.absoluteFillObject, {
-            borderRadius: 14,
-            borderWidth: 1.2,
-            borderColor: 'rgba(255,255,255,0.75)',
-          }]}
-        />
-      </>
-    )}
-    <Text style={[styles.stepChipText, active && { color: '#fff' }]}>{label}</Text>
-  </View>
-);
-
-// ── Tip row ───────────────────────────────────────────────────────────────────
+// ── Tip row ──────────────────────────────────────────────────────────────────
 const TipRow = ({ icon, text, idx }) => (
   <View style={styles.tipRow}>
     <SoftIcon size={34} radius={10} tint={['purple', 'lavender', 'mint', 'pink', 'blue'][idx % 5]}>
@@ -263,7 +392,7 @@ const TipRow = ({ icon, text, idx }) => (
   </View>
 );
 
-// ── Main component ────────────────────────────────────────────────────────────
+// ── Main component ───────────────────────────────────────────────────────────
 const Resources = () => {
   const insets = useSafeAreaInsets();
 
@@ -272,8 +401,6 @@ const Resources = () => {
   const [countdown, setCountdown] = useState(0);
   const [running,   setRunning]   = useState(false);
   const [cycles,    setCycles]    = useState(0);
-
-  const scaleAnim = useRef(new Animated.Value(1)).current;
 
   const phaseSeq = buildPhaseSeq(exercise);
   const phaseKey = phaseSeq[phaseIdx];
@@ -289,30 +416,13 @@ const Resources = () => {
     [exercise],
   );
 
-  // ── Animated orb ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!running) {
-      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }).start();
-      return;
-    }
-    const dur = phaseDuration(phaseKey) * 1000;
-    const toValue =
-      phaseKey === 'inhale' || phaseKey === 'hold' ? 1.38 : 1.0;
-    Animated.timing(scaleAnim, {
-      toValue, duration: dur,
-      easing: Easing.inOut(Easing.ease),
-      useNativeDriver: true,
-    }).start();
-  }, [running, phaseKey, phaseDuration]);
-
-  // ── Countdown + phase advance ────────────────────────────────────────────────
+  // ── Per-second countdown + phase advance ─────────────────────────────────
   const countdownRef = useRef(0);
   const phaseIdxRef  = useRef(0);
-  const runningRef   = useRef(false);
   const exerciseRef  = useRef(exercise);
+  const intervalRef  = useRef(null);
 
   useEffect(() => { exerciseRef.current = exercise; }, [exercise]);
-  useEffect(() => { runningRef.current  = running;  }, [running]);
 
   useEffect(() => {
     phaseIdxRef.current  = phaseIdx;
@@ -322,17 +432,28 @@ const Resources = () => {
 
   useEffect(() => {
     if (!running) return;
-    const interval = setInterval(() => {
-      countdownRef.current -= 1;
-      setCountdown(countdownRef.current);
-      if (countdownRef.current <= 0) {
-        const seq     = buildPhaseSeq(exerciseRef.current);
-        const nextIdx = (phaseIdxRef.current + 1) % seq.length;
-        if (nextIdx === 0) setCycles((c) => c + 1);
-        setPhaseIdx(nextIdx);
-      }
+    // Match the flower's 1s lead-in: don't start ticking the number down
+    // until the animation itself is about to start moving.
+    const startTimeout = setTimeout(() => {
+      const interval = setInterval(() => {
+        countdownRef.current -= 1;
+        if (countdownRef.current <= 0) {
+          // Skip rendering 0 entirely — move straight to the next phase,
+          // whose own effect resets the displayed number to its starting count.
+          const seq     = buildPhaseSeq(exerciseRef.current);
+          const nextIdx = (phaseIdxRef.current + 1) % seq.length;
+          if (nextIdx === 0) setCycles((c) => c + 1);
+          setPhaseIdx(nextIdx);
+        } else {
+          setCountdown(countdownRef.current);
+        }
+      }, 1000);
+      intervalRef.current = interval;
     }, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(startTimeout);
+      if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    };
   }, [running]);
 
   const toggle = () => {
@@ -344,8 +465,19 @@ const Resources = () => {
   };
 
   const selectExercise = (ex) => {
-    if (running) return;
-    setExercise(ex); setPhaseIdx(0); setCycles(0);
+    // Stop session when switching exercise
+    setRunning(false);
+    setPhaseIdx(0);
+    setCycles(0);
+    setExercise(ex);
+  };
+
+  // Map step index → phase key for chip highlighting
+  const stepPhaseKey = (i) => {
+    if (i === 0) return 'inhale';
+    if (i === 1 && phaseSeq.includes('hold')) return 'hold';
+    if (i === exercise.steps.length - 1 && phaseSeq.includes('holdAfter')) return 'holdAfter';
+    return 'exhale';
   };
 
   return (
@@ -379,23 +511,25 @@ const Resources = () => {
           ))}
         </View>
 
-        {/* ── Main orb card (SoftHeroCard) ── */}
+        {/* ── Flower animation hero card — fixed size so it never resizes ── */}
         <SoftHeroCard
-          colors={[pastel.heroPurple, pastel.heroPink, pastel.heroBlue]}
+          colors={[exercise.petalA + 'DD', exercise.petalB + 'BB', pastel.heroBlue + '99']}
           seed={23}
           sparkleCount={5}
           style={{ marginBottom: 18 }}
         >
-          <View style={{ alignItems: 'center' }}>
-            <BreatheOrb
-              scaleAnim={scaleAnim}
-              phaseKey={phaseKey}
+          <View style={styles.heroInner}>
+            <PetalFlower
               running={running}
+              phaseKey={phaseKey}
+              exercise={exercise}
               countdown={countdown}
             />
 
-            {cycles > 0 && (
-              <View style={styles.cyclesBadge}>
+            {/* Always rendered so the card height never shifts — only the
+                content inside fades in/out depending on whether we have cycles */}
+            <View style={styles.cyclesBadgeSlot}>
+              <View style={[styles.cyclesBadge, { opacity: cycles > 0 ? 1 : 0 }]}>
                 <LinearGradient
                   colors={['rgba(255,255,255,0.38)', 'rgba(255,255,255,0.18)']}
                   style={[StyleSheet.absoluteFillObject, { borderRadius: 20 }]}
@@ -403,8 +537,7 @@ const Resources = () => {
                 <View
                   pointerEvents="none"
                   style={[StyleSheet.absoluteFillObject, {
-                    borderRadius: 20,
-                    borderWidth: 1,
+                    borderRadius: 20, borderWidth: 1,
                     borderColor: 'rgba(255,255,255,0.55)',
                   }]}
                 />
@@ -412,7 +545,7 @@ const Resources = () => {
                   {cycles} cycle{cycles !== 1 ? 's' : ''} completed
                 </Text>
               </View>
-            )}
+            </View>
 
             <GradientButton
               label={running ? 'Stop' : 'Start breathing'}
@@ -420,16 +553,15 @@ const Resources = () => {
               colors={
                 running
                   ? [pastel.rose, '#FF8FB0', pastel.heroPink]
-                  : [pastel.heroPink, pastel.heroPurple, pastel.heroBlue]
+                  : [exercise.petalA, exercise.petalB, pastel.heroBlue]
               }
-              style={{ minWidth: 180, marginTop: 4 }}
+              style={{ minWidth: 180, marginTop: 4, marginBottom: theme.spacing.md }}
             />
           </View>
         </SoftHeroCard>
 
-        {/* ── Phase steps card (SoftCard) ── */}
-        <SoftCard seed={11} sparkleCount={3}>
-          {/* Header row */}
+        {/* ── Phase steps card ── */}
+        <SoftCard seed={11} sparkleCount={0}>
           <View style={styles.stepsHeader}>
             <SoftIcon size={36} radius={11} tint={exercise.tint || 'purple'}>
               <Text style={{ fontSize: 17 }}>{exercise.emoji}</Text>
@@ -440,46 +572,20 @@ const Resources = () => {
             </View>
           </View>
 
-          {/* Phase chips */}
-          <View style={styles.stepsRow}>
-            {exercise.steps.map((s, i) => {
-              // Map step index → phase key so the active chip highlights correctly
-              const stepPhaseKey =
-                i === 0 ? 'inhale'
-                  : i === 1 && phaseSeq.includes('hold') ? 'hold'
-                    : i === exercise.steps.length - 1 && phaseSeq.includes('holdAfter') ? 'holdAfter'
-                      : 'exhale';
-              const isActive = running && phaseKey === stepPhaseKey;
-              return (
-                <StepChip
-                  key={i}
-                  label={`${s.label}  ${s.dur}s`}
-                  active={isActive}
-                />
-              );
-            })}
+          {/* 2-per-row centred grid */}
+          <View style={styles.stepsGrid}>
+            {exercise.steps.map((s, i) => (
+              <StepChip
+                key={i}
+                label={`${s.label}  ${s.dur}s`}
+                active={running && phaseKey === stepPhaseKey(i)}
+                exercise={exercise}
+              />
+            ))}
           </View>
-
-          {/* Progress dots — one per phase in the cycle */}
-          {running && (
-            <View style={styles.progressDots}>
-              {phaseSeq.map((pk, i) => (
-                <View
-                  key={i}
-                  style={[
-                    styles.progressDot,
-                    i === phaseIdx && {
-                      width: 20,
-                      backgroundColor: pastel.purpleDeep,
-                    },
-                  ]}
-                />
-              ))}
-            </View>
-          )}
         </SoftCard>
 
-        {/* ── Breathing tips (SoftCard) ── */}
+        {/* ── Tips card ── */}
         <SoftCard seed={7} sparkleCount={3}>
           <View style={styles.tipsHeader}>
             <SoftIcon size={36} radius={11} tint="mint">
@@ -500,13 +606,11 @@ const styles = StyleSheet.create({
   scroll:   { flex: 1, backgroundColor: 'transparent' },
   content:  { padding: theme.spacing.md, paddingBottom: 110 },
 
-  // Page header
   pageHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md },
   pageTitle:    { fontSize: theme.typography.fontSize.heading.md, fontWeight: '800', color: pastel.textDeep },
   pageSubtitle: { fontSize: theme.typography.fontSize.paragraph.sm, color: pastel.textMuted, marginTop: 2 },
 
-  // Exercise selector
-  exRow: { flexDirection: 'row', gap: 8, marginBottom: theme.spacing.md },
+  exRow:    { flexDirection: 'row', gap: 8, marginBottom: theme.spacing.md },
   exPill: {
     flex: 1, paddingVertical: 11, paddingHorizontal: 6,
     borderRadius: 22, alignItems: 'center', justifyContent: 'center',
@@ -518,70 +622,69 @@ const styles = StyleSheet.create({
   },
   exPillText: { fontSize: 11, fontWeight: '700', color: pastel.textMuted },
 
-  // Orb
-  orbContainer: {
-    width: 270, height: 270,
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: theme.spacing.lg,
+  // ── Hero card — fixed height; content is packed toward the top (not
+  // centered) so there's always visible breathing room below the button,
+  // instead of it sitting flush against the card's bottom border.
+  heroInner: {
+    alignItems: 'center',
+    height: 420,
+    justifyContent: 'flex-start',
   },
-  orbHalo: {
-    position: 'absolute',
-    width: 210, height: 210, borderRadius: 105,
-  },
-  orbRingWrap: {
-    position: 'absolute',
-    width: 180, height: 180, borderRadius: 90,
-    overflow: 'hidden',
-    shadowColor: pastel.purpleDeep, shadowOpacity: 0.25,
-    shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8,
-  },
-  orbRingGradient: {
-    width: '100%', height: '100%', borderRadius: 90,
-  },
-  orbInnerRing: {
-    position: 'absolute',
-    width: 130, height: 130, borderRadius: 65,
-  },
-  orbCentre: {
-    width: 108, height: 108, borderRadius: 54,
-    alignItems: 'center', justifyContent: 'center',
-    overflow: 'hidden',
-    shadowColor: pastel.purpleDeep, shadowOpacity: 0.18,
-    shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 5,
-  },
-  orbPhaseText: { fontSize: 15, fontWeight: '800', textAlign: 'center' },
-  orbTimer:     { fontSize: 34, fontWeight: '900', textAlign: 'center', marginTop: -2 },
 
-  // Cycles badge
+  // ── Petal flower ──────────────────────────────────────────────────────────
+  floatingLabel: {
+    position: 'absolute',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  floatingPhase: {
+    fontSize: 18, fontWeight: '800', textAlign: 'center',
+    textShadowColor: 'rgba(74,46,122,0.45)',
+    textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6,
+  },
+  floatingTimer: {
+    fontSize: 42, fontWeight: '900', textAlign: 'center', marginTop: -6,
+    textShadowColor: 'rgba(74,46,122,0.45)',
+    textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8,
+  },
+
+  // Cycles badge — slot always reserves the same height so nothing reflows
+  cyclesBadgeSlot: {
+    height: 26, justifyContent: 'center', marginBottom: theme.spacing.xs,
+  },
   cyclesBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7,
-    marginBottom: theme.spacing.sm, overflow: 'hidden',
+    overflow: 'hidden', alignSelf: 'center',
   },
   cyclesText: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.95)' },
 
-  // Steps card
+  // Steps
   stepsHeader: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.sm },
   stepsTitle:  { fontSize: 14, fontWeight: '800', color: pastel.textDeep },
   stepsDesc:   { fontSize: 11, color: pastel.textMuted, fontWeight: '600', marginTop: 1 },
-  stepsRow:    { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
-  stepChip: {
-    paddingHorizontal: 14, paddingVertical: 9, borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.60)',
-    borderWidth: 1.4, borderColor: 'rgba(255,255,255,0.82)',
-    shadowColor: pastel.purpleDeep, shadowOpacity: 0.10,
-    shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: 2,
+  stepsGrid: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    gap: 10, justifyContent: 'center',
   },
-  stepChipText: { fontSize: 12, fontWeight: '700', color: pastel.textDeep },
-
-  // Progress dots
-  progressDots: { flexDirection: 'row', gap: 6, justifyContent: 'center', marginTop: 4 },
-  progressDot: {
-    width: 8, height: 8, borderRadius: 4,
-    backgroundColor: 'rgba(156,123,234,0.30)',
+  stepChipShadow: {
+    width: '47%', borderRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
   },
+  stepChipClip: {
+    borderRadius: 18, overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  stepChipRing: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    borderRadius: 18, borderWidth: 1.2, borderColor: 'rgba(255,255,255,0.55)',
+  },
+  stepChipRingActive: {
+    borderColor: 'rgba(255,255,255,0.85)',
+  },
+  stepChipText: { fontSize: 13, fontWeight: '700', color: pastel.textDeep, textAlign: 'center' },
 
-  // Tips card
+  // Tips
   tipsHeader: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.md },
   tipsTitle:  { fontSize: 15, fontWeight: '800', color: pastel.textDeep },
   tipRow:     { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: 10 },
