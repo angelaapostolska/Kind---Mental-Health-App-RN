@@ -371,29 +371,26 @@ const Journal = () => {
                   Mood <Text style={styles.moodPickerOptional}>(optional)</Text>
                 </Text>
               </View>
+              {/* CHANGED: was a hand-rolled flat View + manual gradient overlay
+                  per circle — now SoftIcon directly, same component and same
+                  proportions (radius ≈ 0.3× size) as the Mood tab's Step 1
+                  mood-selection circles, so the two screens' emoji tiles
+                  actually match instead of two separate approximations of the
+                  same look. */}
               <View style={styles.moodPickerRow}>
                 {MOOD_LEVELS.map((m) => (
                   <TouchableOpacity key={m.level} onPress={() => setMood(mood === m.level ? null : m.level)} style={styles.moodPickerBtn}>
-                    <View style={[
-                      styles.moodPickerCircle,
-                      {
-                        backgroundColor: m.color,
-                        overflow: 'hidden',
-                        opacity: mood !== null && mood !== m.level ? 0.35 : 1,
-                        shadowColor: m.color, shadowOpacity: 0.45, shadowRadius: 8,
-                        shadowOffset: { width: 0, height: 4 }, elevation: 4,
-                      },
-                      mood === m.level && styles.moodPickerActive,
-                    ]}>
-                      {/* Glossy highlight, same treatment as SoftIcon */}
-                      <LinearGradient
-                        colors={['rgba(255,255,255,0.55)', 'rgba(255,255,255,0)']}
-                        start={{ x: 0.3, y: 0 }} end={{ x: 0.5, y: 0.6 }}
-                        style={StyleSheet.absoluteFillObject}
-                        pointerEvents="none"
-                      />
+                    <SoftIcon
+                      size={44}
+                      radius={13}
+                      baseColor={m.color}
+                      style={[
+                        { opacity: mood !== null && mood !== m.level ? 0.35 : 1 },
+                        mood === m.level && styles.moodPickerActive,
+                      ]}
+                    >
                       <Text style={{ fontSize: 18 }}>{m.emoji}</Text>
-                    </View>
+                    </SoftIcon>
                     <Text style={styles.moodPickerLabel2}>{m.label}</Text>
                   </TouchableOpacity>
                 ))}
@@ -489,12 +486,16 @@ const styles = StyleSheet.create({
   sectionTitle:  { fontSize: theme.typography.fontSize.paragraph.md, fontWeight: '700', color: pastel.textDeep },
 
   // Prompt cards — full glass treatment
+  // CHANGED: same fix as SoftCard in SoftGlass.jsx — a hardcoded translucent
+  // white background sitting behind the card's own translucent gradient
+  // overlays showed through as a mismatched "white rectangle." Solid, opaque,
+  // light lavender instead, so there's no mismatched base layer underneath.
   promptCard: {
     flexDirection: 'row', gap: theme.spacing.sm, alignItems: 'center',
     borderRadius: 18, padding: theme.spacing.md, marginBottom: 10,
     shadowColor: pastel.purpleDeep, shadowOpacity: 0.22, shadowRadius: 14,
     shadowOffset: { width: 0, height: 8 }, elevation: 6,
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: '#F0E8FC',
   },
   promptText: { flex: 1, fontSize: theme.typography.fontSize.paragraph.sm, fontWeight: '600', color: pastel.textDeep, lineHeight: 20 },
 
@@ -570,8 +571,10 @@ const styles = StyleSheet.create({
   moodPickerOptional: { fontWeight: '400', color: pastel.textMuted },
   moodPickerRow:      { flexDirection: 'row', justifyContent: 'space-between', marginBottom: theme.spacing.lg },
   moodPickerBtn:      { alignItems: 'center', gap: 4 },
-  moodPickerCircle:   { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  moodPickerActive:   { borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)', transform: [{ scale: 1.1 }] },
+  // CHANGED: active ring now matches SoftIcon's own radius (13) instead of
+  // the old hand-rolled circle's radius (14/20) — was a slight mismatch that
+  // would've made the border corners not line up with the icon's actual shape.
+  moodPickerActive:   { borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)', borderRadius: 15, transform: [{ scale: 1.1 }] },
   moodPickerLabel2:   { fontSize: 9, fontWeight: '600', color: pastel.textMuted },
 
   actionRow: { flexDirection: 'row', gap: theme.spacing.xs, alignItems: 'center' },

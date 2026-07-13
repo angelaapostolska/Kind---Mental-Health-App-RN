@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { theme } from '@/constants/theme';
-import { GlossyCircle, pastel } from '@/components';
+import { pastel } from '@/components';
+import { SoftIcon } from '@/components/home/SoftGlass';
 import SwipeDismissSheet from './SwipeDismissSheet';
 
 const SOUND_ICONS = {
@@ -16,10 +17,10 @@ const SOUNDS = ['Rain', 'Ocean', 'Forest', 'White noise'];
 const DURATIONS = [5, 10, 15, 20, 30];
 
 const GUIDED_TYPES = [
-  { name: 'Body Scan',       desc: 'Release tension head to toe',   icon: 'human',                duration: '10 min' },
-  { name: 'Loving Kindness', desc: 'Cultivate compassion',          icon: 'heart-outline',        duration: '8 min'  },
-  { name: 'Focus',           desc: 'Train sustained attention',     icon: 'eye-outline',          duration: '10 min' },
-  { name: 'Sleep',           desc: 'Drift off peacefully',          icon: 'moon-waning-crescent', duration: '12 min' },
+  { name: 'Body Scan',       desc: 'Release tension head to toe',   icon: 'human',                duration: '10 min', color: pastel.mintDeep },
+  { name: 'Loving Kindness', desc: 'Cultivate compassion',          icon: 'heart-outline',        duration: '8 min',  color: pastel.rose },
+  { name: 'Focus',           desc: 'Train sustained attention',     icon: 'eye-outline',          duration: '10 min', color: pastel.heroBlue },
+  { name: 'Sleep',           desc: 'Drift off peacefully',          icon: 'moon-waning-crescent', duration: '12 min', color: pastel.purpleDeep },
 ];
 
 // onStart        receives { sound, duration }  — sound + timer sessions
@@ -93,9 +94,11 @@ const MeditationModal = ({ visible, onClose, onStart, onStartGuided }) => {
               onPress={() => onStartGuided({ type: t.name })}
               activeOpacity={0.75}
             >
-              <GlossyCircle size={42} backgroundColor="rgba(183,156,242,0.30)">
-                <MaterialCommunityIcons name={t.icon} size={20} color={pastel.purpleDeep} />
-              </GlossyCircle>
+              {/* CHANGED: each type now gets its own accent color instead of
+                  one fixed purple for all four */}
+              <SoftIcon size={42} radius={13} baseColor={t.color}>
+                <MaterialCommunityIcons name={t.icon} size={20} color="#fff" />
+              </SoftIcon>
               <View style={{ flex: 1 }}>
                 <Text style={styles.guidedName}>{t.name}</Text>
                 <Text style={styles.guidedDesc}>{t.desc}</Text>

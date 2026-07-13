@@ -10,6 +10,22 @@ import { theme } from '@/constants/theme';
 import { ScreenGradientBackground, GradientButton, pastel } from '@/components';
 import { SoftCard, SoftHeroCard, SoftIcon } from '@/components/home/SoftGlass';
 
+// CHANGED: same fix philosophy as SoftCard/Journal's prompt cards — a
+// translucent low-alpha tint (exercise.petalA + '26') can read as washed-out
+// or inconsistent depending on what's rendered behind it. This blends the
+// exercise color toward white by `amt` instead, producing a solid, opaque,
+// genuinely light tint with nothing translucent underneath it.
+const mixWhite = (hex, amt) => {
+  const h = (hex || '#9C7BEA').replace('#', '');
+  const n = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const r = parseInt(n.slice(0, 2), 16);
+  const g = parseInt(n.slice(2, 4), 16);
+  const b = parseInt(n.slice(4, 6), 16);
+  const mix = (c) => Math.round(c + (255 - c) * amt);
+  const to = (c) => c.toString(16).padStart(2, '0');
+  return `#${to(mix(r))}${to(mix(g))}${to(mix(b))}`;
+};
+
 // ── Exercise definitions ─────────────────────────────────────────────────────
 const EXERCISES = [
   {
@@ -74,62 +90,33 @@ const TIPS = [
 // Number of petal pairs (matches Swift ForEach 0...2 = 3 pairs)
 const PETAL_SETS = 3;
 
-// ── Petal-flower breathing animation ────────────────────────────────────────
-//
-//  Mirrors the SwiftUI structure exactly:
-//    ForEach (0...2):
-//      ZStack:
-//        Circle  offset +Y  (rotates with ZStack)
-//        Circle  offset -Y  (rotates with ZStack)
-//      .rotationEffect( circleSetNumber * 60° )
-//      .scaleEffect( bloomed ? 1 : 0.2 )
-//
-//  React Native doesn't have a single "scale + rotate + offset" combo natively
-//  so we drive two Animated.Values — flowerScale (0.2 ↔ 1) and flowerRotate
-//  (0 ↔ 60°) — and map them onto each petal pair via inline transforms.
-//
 const PetalFlower = ({ running, phaseKey, exercise, countdown }) => {
-  const CIRCLE_D    = 120;              // diameter of each inner petal circle (px)
-  const OFFSET      = CIRCLE_D * 0.5;   // how far each inner circle is pushed from centre
+  const CIRCLE_D    = 120;
+  const OFFSET      = CIRCLE_D * 0.5;
 
-  // Outer ring — sized to match the footprint of the original ambient glow
-  // circle it replaced (~143px radius), just built from petals instead of a
-  // flat circle.
   const OUTER_D      = 200;
   const OUTER_OFFSET = 55;
 
-  // Container needs to fit the outer ring fully without clipping
   const SIZE   = (OUTER_OFFSET + OUTER_D / 2) * 2 + 20;
   const CENTRE = SIZE / 2;
 
-  // ── Single shared animation value: 0 = closed, 1 = open ──────────────────
   const flowerAnim = useRef(new Animated.Value(0)).current;
 
-  // Single ref for whatever animation is currently in flight. Only one
-  // effect ever touches this now — that's what guarantees Stop (or switching
-  // exercises, which also sets running=false) truly kills the animation
-  // instead of a second effect silently restarting it.
   const animRef = useRef(null);
 
-  // Map 0→1 to scale 0.18→1.0
   const petalScale = flowerAnim.interpolate({
     inputRange: [0, 1], outputRange: [0.18, 1.0],
   });
-  // Rotation as NUMBERS (degrees) — never use string outputs if you need to
-  // chain another interpolation; React Native throws "not a number" otherwise.
   const baseRotateDeg = flowerAnim.interpolate({
     inputRange: [0, 1], outputRange: [0, 60],
   });
-  // Inner petal opacity: fades up as petals open
   const petalOpacity = flowerAnim.interpolate({
     inputRange: [0, 0.3, 1], outputRange: [0.25, 0.45, 0.68],
   });
-  // Outer petal opacity: same shape, much more transparent throughout
   const outerOpacity = flowerAnim.interpolate({
     inputRange: [0, 0.3, 1], outputRange: [0.08, 0.16, 0.28],
   });
 
-  // ── Drive the animation speed from the current phase duration ─────────────
   const isOpening = phaseKey === 'inhale' || phaseKey === 'hold';
   const toValue   = isOpening ? 1 : 0;
   const dur       = (() => {
@@ -140,18 +127,12 @@ const PetalFlower = ({ running, phaseKey, exercise, countdown }) => {
     return 3000;
   })();
 
-  // Track whether this is the very first inhale after pressing Start
   const isFirstRunRef = useRef(false);
 
-  // Mark the first inhale so it gets its lead-in delay, the instant a session starts
   useEffect(() => {
     if (running) isFirstRunRef.current = true;
   }, [running]);
 
-  // ── Stop control: fires the instant running goes false — whether from the
-  // Stop button or from switching exercises. Kills whatever's in flight and
-  // settles the flower to a calm closed state; nothing loops afterward, so
-  // there's no way for the flower to keep moving once stopped.
   useEffect(() => {
     if (running) return;
 
@@ -168,15 +149,11 @@ const PetalFlower = ({ running, phaseKey, exercise, countdown }) => {
     return () => { settle.stop(); animRef.current = null; };
   }, [running]);
 
-  // ── Phase driver: runs when phase changes while a session is active ───────
   useEffect(() => {
-    if (!running) return; // stop control above owns the idle/settled state
+    if (!running) return;
 
     if (animRef.current) { animRef.current.stop(); animRef.current = null; }
 
-    // HOLD phases: don't just freeze wherever the previous animation happened
-    // to land — ease smoothly into the fully open (hold) or fully closed
-    // (holdAfter) resting position so the transition feels soft, not abrupt.
     if (phaseKey === 'hold' || phaseKey === 'holdAfter') {
       const settle = Animated.timing(flowerAnim, {
         toValue, duration: 400,
@@ -187,9 +164,8 @@ const PetalFlower = ({ running, phaseKey, exercise, countdown }) => {
       return () => { settle.stop(); animRef.current = null; };
     }
 
-    // 1 s delay only on the very first inhale after pressing Start
     const delay = isFirstRunRef.current ? 1000 : 0;
-    isFirstRunRef.current = false; // only applies once per start
+    isFirstRunRef.current = false;
 
     let timeout = null;
     timeout = setTimeout(() => {
@@ -208,10 +184,8 @@ const PetalFlower = ({ running, phaseKey, exercise, countdown }) => {
     };
   }, [running, phaseKey, dur, toValue]);
 
-  // Per-set rotation: Animated.add(baseRotateDeg, staticOffset) keeps everything
-  // numeric, then a single interpolate maps number→'Xdeg' string at the leaf.
   const setAngles = Array.from({ length: PETAL_SETS }, (_, i) => {
-    const staticOffset = i * (180 / PETAL_SETS);          // 0, 60, 120
+    const staticOffset = i * (180 / PETAL_SETS);
     const totalDeg = Animated.add(baseRotateDeg, staticOffset);
     const rotateDeg = totalDeg.interpolate({
       inputRange: [0, 360], outputRange: ['0deg', '360deg'],
@@ -224,7 +198,6 @@ const PetalFlower = ({ running, phaseKey, exercise, countdown }) => {
   return (
     <View style={{ width: SIZE, height: SIZE, alignItems: 'center', justifyContent: 'center', marginTop: theme.spacing.xs, marginBottom: 0 }}>
 
-      {/* Outer petal ring — bigger, much more transparent, replaces the old flat glow circle */}
       {setAngles.map(({ rotateDeg }, idx) => (
         <Animated.View
           key={`outer-${idx}`}
@@ -261,7 +234,6 @@ const PetalFlower = ({ running, phaseKey, exercise, countdown }) => {
         </Animated.View>
       ))}
 
-      {/* Inner petal pairs — each is a full-size absolute layer so children are never clipped */}
       {setAngles.map(({ rotateDeg }, idx) => (
         <Animated.View
           key={idx}
@@ -272,7 +244,6 @@ const PetalFlower = ({ running, phaseKey, exercise, countdown }) => {
             opacity: petalOpacity,
           }}
         >
-          {/* Top circle — centred in layer, shifted up by OFFSET */}
           <LinearGradient
             colors={[petalA, petalB]}
             start={{ x: 0.5, y: 0 }}
@@ -284,7 +255,6 @@ const PetalFlower = ({ running, phaseKey, exercise, countdown }) => {
               top:  CENTRE - CIRCLE_D / 2 - OFFSET,
             }}
           />
-          {/* Bottom circle — shifted down by OFFSET */}
           <LinearGradient
             colors={[petalB, petalA]}
             start={{ x: 0.5, y: 0 }}
@@ -299,7 +269,6 @@ const PetalFlower = ({ running, phaseKey, exercise, countdown }) => {
         </Animated.View>
       ))}
 
-      {/* Floating phase label — sits over the flower, no white disc */}
       <View style={styles.floatingLabel} pointerEvents="none">
         {running ? (
           <>
@@ -314,7 +283,6 @@ const PetalFlower = ({ running, phaseKey, exercise, countdown }) => {
   );
 };
 
-// ── Glossy exercise selector pill ───────────────────────────────────────────
 const ExercisePill = ({ ex, active, onPress }) => (
   <TouchableOpacity
     onPress={onPress}
@@ -350,13 +318,13 @@ const ExercisePill = ({ ex, active, onPress }) => (
 );
 
 // ── Glossy step chip ─────────────────────────────────────────────────────────
-// The lighter rectangle was an Android shadow-rendering artifact: this app's
-// own SoftGlass.jsx works around the exact same bug by never putting
-// `elevation` and `overflow: 'hidden'` on the same view (see its `shadow` /
-// `clip` split). StepChip was doing both at once. Splitting it the same way
-// fixes it: outer view owns the shadow, inner view owns the rounded clip + fill.
+// CHANGED: inactive fill was exercise.petalA + '26' — a translucent ~15%
+// alpha tint. Same fix as SoftCard/Journal's prompt cards: use mixWhite to
+// produce a solid, opaque, genuinely light tint instead of a translucent one,
+// so there's nothing underneath that can show through inconsistently.
 const StepChip = ({ label, active, exercise }) => {
-  const fillColor = active ? exercise.petalA : exercise.petalA + '26';
+  const lightTint = mixWhite(exercise.petalA, 0.8);
+  const fillColor = active ? exercise.petalA : lightTint;
   return (
     <View
       style={[
@@ -371,7 +339,6 @@ const StepChip = ({ label, active, exercise }) => {
       ]}
     >
       <View style={[styles.stepChipClip, { backgroundColor: fillColor }]}>
-        {/* thin glassy ring for the bubbly edge — no fill overlay of any kind */}
         <View
           pointerEvents="none"
           style={[styles.stepChipRing, active && styles.stepChipRingActive]}
@@ -382,7 +349,6 @@ const StepChip = ({ label, active, exercise }) => {
   );
 };
 
-// ── Tip row ──────────────────────────────────────────────────────────────────
 const TipRow = ({ icon, text, idx }) => (
   <View style={styles.tipRow}>
     <SoftIcon size={34} radius={10} tint={['purple', 'lavender', 'mint', 'pink', 'blue'][idx % 5]}>
@@ -392,7 +358,6 @@ const TipRow = ({ icon, text, idx }) => (
   </View>
 );
 
-// ── Main component ───────────────────────────────────────────────────────────
 const Resources = () => {
   const insets = useSafeAreaInsets();
 
@@ -416,7 +381,6 @@ const Resources = () => {
     [exercise],
   );
 
-  // ── Per-second countdown + phase advance ─────────────────────────────────
   const countdownRef = useRef(0);
   const phaseIdxRef  = useRef(0);
   const exerciseRef  = useRef(exercise);
@@ -432,14 +396,10 @@ const Resources = () => {
 
   useEffect(() => {
     if (!running) return;
-    // Match the flower's 1s lead-in: don't start ticking the number down
-    // until the animation itself is about to start moving.
     const startTimeout = setTimeout(() => {
       const interval = setInterval(() => {
         countdownRef.current -= 1;
         if (countdownRef.current <= 0) {
-          // Skip rendering 0 entirely — move straight to the next phase,
-          // whose own effect resets the displayed number to its starting count.
           const seq     = buildPhaseSeq(exerciseRef.current);
           const nextIdx = (phaseIdxRef.current + 1) % seq.length;
           if (nextIdx === 0) setCycles((c) => c + 1);
@@ -465,14 +425,12 @@ const Resources = () => {
   };
 
   const selectExercise = (ex) => {
-    // Stop session when switching exercise
     setRunning(false);
     setPhaseIdx(0);
     setCycles(0);
     setExercise(ex);
   };
 
-  // Map step index → phase key for chip highlighting
   const stepPhaseKey = (i) => {
     if (i === 0) return 'inhale';
     if (i === 1 && phaseSeq.includes('hold')) return 'hold';
@@ -488,7 +446,6 @@ const Resources = () => {
         contentContainerStyle={[styles.content, { paddingTop: insets.top + theme.spacing.md }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Page header ── */}
         <View style={styles.pageHeader}>
           <View>
             <Text style={styles.pageTitle}>Breathe</Text>
@@ -499,7 +456,6 @@ const Resources = () => {
           </SoftIcon>
         </View>
 
-        {/* ── Exercise selector ── */}
         <View style={styles.exRow}>
           {EXERCISES.map((ex) => (
             <ExercisePill
@@ -511,7 +467,6 @@ const Resources = () => {
           ))}
         </View>
 
-        {/* ── Flower animation hero card — fixed size so it never resizes ── */}
         <SoftHeroCard
           colors={[exercise.petalA + 'DD', exercise.petalB + 'BB', pastel.heroBlue + '99']}
           seed={23}
@@ -526,8 +481,6 @@ const Resources = () => {
               countdown={countdown}
             />
 
-            {/* Always rendered so the card height never shifts — only the
-                content inside fades in/out depending on whether we have cycles */}
             <View style={styles.cyclesBadgeSlot}>
               <View style={[styles.cyclesBadge, { opacity: cycles > 0 ? 1 : 0 }]}>
                 <LinearGradient
@@ -560,7 +513,6 @@ const Resources = () => {
           </View>
         </SoftHeroCard>
 
-        {/* ── Phase steps card ── */}
         <SoftCard seed={11} sparkleCount={0}>
           <View style={styles.stepsHeader}>
             <SoftIcon size={36} radius={11} tint={exercise.tint || 'purple'}>
@@ -572,7 +524,6 @@ const Resources = () => {
             </View>
           </View>
 
-          {/* 2-per-row centred grid */}
           <View style={styles.stepsGrid}>
             {exercise.steps.map((s, i) => (
               <StepChip
@@ -585,7 +536,6 @@ const Resources = () => {
           </View>
         </SoftCard>
 
-        {/* ── Tips card ── */}
         <SoftCard seed={7} sparkleCount={3}>
           <View style={styles.tipsHeader}>
             <SoftIcon size={36} radius={11} tint="mint">
@@ -622,16 +572,12 @@ const styles = StyleSheet.create({
   },
   exPillText: { fontSize: 11, fontWeight: '700', color: pastel.textMuted },
 
-  // ── Hero card — fixed height; content is packed toward the top (not
-  // centered) so there's always visible breathing room below the button,
-  // instead of it sitting flush against the card's bottom border.
   heroInner: {
     alignItems: 'center',
     height: 420,
     justifyContent: 'flex-start',
   },
 
-  // ── Petal flower ──────────────────────────────────────────────────────────
   floatingLabel: {
     position: 'absolute',
     alignItems: 'center', justifyContent: 'center',
@@ -647,7 +593,6 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8,
   },
 
-  // Cycles badge — slot always reserves the same height so nothing reflows
   cyclesBadgeSlot: {
     height: 26, justifyContent: 'center', marginBottom: theme.spacing.xs,
   },
@@ -658,7 +603,6 @@ const styles = StyleSheet.create({
   },
   cyclesText: { fontSize: 12, fontWeight: '700', color: 'rgba(255,255,255,0.95)' },
 
-  // Steps
   stepsHeader: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.sm },
   stepsTitle:  { fontSize: 14, fontWeight: '800', color: pastel.textDeep },
   stepsDesc:   { fontSize: 11, color: pastel.textMuted, fontWeight: '600', marginTop: 1 },
@@ -684,7 +628,6 @@ const styles = StyleSheet.create({
   },
   stepChipText: { fontSize: 13, fontWeight: '700', color: pastel.textDeep, textAlign: 'center' },
 
-  // Tips
   tipsHeader: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.md },
   tipsTitle:  { fontSize: 15, fontWeight: '800', color: pastel.textDeep },
   tipRow:     { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: 10 },

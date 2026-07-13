@@ -12,6 +12,17 @@
 //     background + the rounded corners are owned solely by the clip, so Android's
 //     elevation shadow is rounded instead of drawing a square halo, and there's no
 //     radius seam between the gradient layers and the card edge.
+//
+// v3 changes:
+//   • SoftCard's top sheen + corner glow softened and stretched further down.
+//     Both SoftCard and SoftHeroCard stack the exact same three translucent-
+//     white layers (base fill → sheen → corner glow). On SoftHeroCard that
+//     sits on a vivid saturated color, so it just reads as a glossy highlight.
+//     On SoftCard the base fill is *itself* pale/off-white, so stacking a
+//     0.5-opacity white sheen that cuts off at 40% down created a visible
+//     seam — the eye can tell "more white" from "less white" on a pale
+//     background in a way it can't against a vivid one. Lower peak opacity +
+//     a longer fade removes the seam without losing the highlight entirely.
 
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
@@ -76,30 +87,48 @@ const Sparkles = ({ seed = 1, count = 4, dim }) => {
 
 // ── Frosted card ────────────────────────────────────────────────────────────────
 export const SoftCard = ({ children, style, radius = 24, fill, noPad, seed = 1, sparkleCount = 4, ...rest }) => (
-  // wrapper carries the shadow + a background so the (Android) elevation shadow is
-  // rounded, not square. The inner clip owns the rounded corners for everything else.
-  <View style={[s.shadow, { borderRadius: radius, backgroundColor: 'rgba(255,255,255,0.55)' }, style]} {...rest}>
+  // CHANGED: outer background was a hardcoded translucent white regardless of
+  // the `fill` prop — unlike SoftHeroCard, which always derives its outer
+  // background from its own `colors`. Since the inner fill is translucent,
+  // that fixed white base showed through as its own distinct rectangular
+  // shape underneath whatever tint the inner content actually used — this is
+  // "the white rectangle." Using a solid, opaque lavender instead (matching
+  // the brand tint, same idea as SoftHeroCard using colors[1]) means there's
+  // no mismatched base color left to show through, regardless of what `fill`
+  // a given card passes in.
+  <View style={[s.shadow, { borderRadius: radius, backgroundColor: '#F0E8FC' }, style]} {...rest}>
     <View style={[s.clip, { borderRadius: radius }]}>
-      {/* translucent frosted base */}
+      {/* CHANGED: default fill was near-white (rgba(255,255,255,0.58/0.40)),
+          which is why every SoftCard without a custom `fill` prop read as a
+          flat white/light rectangle against the page — no real color to it,
+          unlike SoftHeroCard's vivid saturated gradient. Several call sites
+          were already manually overriding `fill` with a lavender tint to work
+          around this; baking a light lavender tint in as the actual default
+          fixes it everywhere at once instead of requiring every caller to
+          remember to pass one. */}
       <LinearGradient
-        colors={fill || ['rgba(255,255,255,0.58)', 'rgba(255,255,255,0.40)']}
+        colors={fill || ['rgba(199,168,242,0.42)', 'rgba(255,255,255,0.38)']}
         start={{ x: 0.5, y: 0 }}
         end={{ x: 0.5, y: 1 }}
         style={StyleSheet.absoluteFillObject}
       />
-      {/* soft top-edge sheen — fades out by ~40% (no bright patch in the middle) */}
+      {/* CHANGED: sheen softened (0.5 → 0.32 peak) and stretched further down
+          (cuts off at 40% → fades out by 65%), so it blends gradually into
+          the pale base fill instead of leaving a visible seam where it used
+          to cut off. */}
       <LinearGradient
-        colors={['rgba(255,255,255,0.5)', 'rgba(255,255,255,0)']}
+        colors={['rgba(255,255,255,0.32)', 'rgba(255,255,255,0)']}
         start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 0.4 }}
+        end={{ x: 0.5, y: 0.65 }}
         style={StyleSheet.absoluteFillObject}
         pointerEvents="none"
       />
-      {/* gentle top-left corner glow */}
+      {/* CHANGED: corner glow softened (0.4 → 0.22 peak) and stretched
+          (0.45/0.42 → 0.6/0.55), same reasoning as the sheen above. */}
       <LinearGradient
-        colors={['rgba(255,255,255,0.4)', 'rgba(255,255,255,0)']}
+        colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0)']}
         start={{ x: 0, y: 0 }}
-        end={{ x: 0.45, y: 0.42 }}
+        end={{ x: 0.6, y: 0.55 }}
         style={StyleSheet.absoluteFillObject}
         pointerEvents="none"
       />
@@ -129,7 +158,8 @@ export const SoftHeroCard = ({
         end={{ x: 1, y: 0.85 }}
         style={StyleSheet.absoluteFillObject}
       />
-      {/* top-edge sheen */}
+      {/* top-edge sheen — left as-is; on a vivid saturated fill this already
+          reads as a clean glossy highlight with no visible seam */}
       <LinearGradient
         colors={['rgba(255,255,255,0.34)', 'rgba(255,255,255,0)']}
         start={{ x: 0.5, y: 0 }}
