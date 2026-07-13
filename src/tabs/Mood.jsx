@@ -193,8 +193,8 @@ const Mood = () => {
   const [tab, setTab] = useState('track');
   const [step, setStep] = useState(1);
   const [mood, setMood] = useState(null);
-  const [feeling, setFeeling] = useState(null);
-  const [factor, setFactor] = useState(null);
+  const [feelings, setFeelings] = useState([]);
+  const [factors, setFactors] = useState([]);
   const [note, setNote] = useState('');
   const [done, setDone] = useState(false);
   const [month, setMonth] = useState(new Date());
@@ -220,7 +220,15 @@ const Mood = () => {
     if (userId) refetchEntries();
   }, [month, userId]);
 
-  const reset = () => { setStep(1); setMood(null); setFeeling(null); setFactor(null); setNote(''); setDone(false); };
+  const reset = () => { setStep(1); setMood(null); setFeelings([]); setFactors([]); setNote(''); setDone(false); };
+
+  const toggleFeeling = (f) => {
+    setFeelings((prev) => (prev.some((x) => x.id === f.id) ? prev.filter((x) => x.id !== f.id) : [...prev, f]));
+  };
+
+  const toggleFactor = (f) => {
+    setFactors((prev) => (prev.some((x) => x.id === f.id) ? prev.filter((x) => x.id !== f.id) : [...prev, f]));
+  };
 
   const next = async () => {
     if (step < 3) {
@@ -239,8 +247,8 @@ const Mood = () => {
         moodValue: mood,
         note: note.trim(),
         user: { id: userId },
-        selectedEmotions: feeling ? [{ id: feeling.id }] : [],
-        selectedFactors: factor ? [{ id: factor.id }] : [],
+        selectedEmotions: feelings.map((f) => ({ id: f.id })),
+        selectedFactors: factors.map((f) => ({ id: f.id })),
       }).unwrap();
       setDone(true);
     } catch (err) {
@@ -271,8 +279,8 @@ const Mood = () => {
 
   const canProceed =
     (step === 1 && mood !== null) ||
-    (step === 2 && feeling !== null) ||
-    (step === 3 && factor !== null);
+    (step === 2 && feelings.length > 0) ||
+    (step === 3 && factors.length > 0);
 
   const levelsByDate = {};
   monthEntries.forEach((e) => {
@@ -313,12 +321,12 @@ const Mood = () => {
             {done ? (
               <SoftCard seed={13} sparkleCount={3}>
                 <View style={styles.centered}>
-                  <SoftIcon size={64} radius={32} baseColor={mood ? moodColor(mood) : '#9b9b9b'} style={{ marginBottom: theme.spacing.sm }}>
+                  <SoftIcon size={64} radius={20} baseColor={mood ? moodColor(mood) : '#9b9b9b'} style={{ marginBottom: theme.spacing.sm }}>
                     <MaterialIcons name="check" size={28} color="#fff" />
                   </SoftIcon>
                   <Text style={styles.doneTitle}>Mood logged</Text>
                   <Text style={styles.doneSub}>
-                    {mood && moodLabel(mood)} · {feeling?.name} · {factor?.name}
+                    {mood && moodLabel(mood)} · {feelings.map((f) => f.name).join(', ')} · {factors.map((f) => f.name).join(', ')}
                   </Text>
                   <GradientButton label="Log another" small onPress={reset} style={{ marginTop: theme.spacing.md }} />
                 </View>
@@ -345,7 +353,7 @@ const Mood = () => {
                     <Text style={styles.stepSub}>Pick a mood</Text>
                     <View style={styles.moodRow}>
                       {MOOD_LEVELS.map((m) => (
-                        <TouchableOpacity key={m.level} onPress={() => { setMood(m.level); setFeeling(null); }} style={styles.moodBtn}>
+                        <TouchableOpacity key={m.level} onPress={() => { setMood(m.level); setFeelings([]); }} style={styles.moodBtn}>
                           {/* CHANGED: was a flat colored View — now a SoftIcon bubble
                               (two-tone gradient, colored shadow, glossy highlight) */}
                           <SoftIcon
@@ -377,8 +385,8 @@ const Mood = () => {
                           <GlossyPill
                             key={f.id}
                             label={f.name}
-                            active={feeling?.id === f.id}
-                            onPress={() => setFeeling(f)}
+                            active={feelings.some((x) => x.id === f.id)}
+                            onPress={() => toggleFeeling(f)}
                             style={styles.chip}
                             textStyle={styles.chipText}
                           />
@@ -400,8 +408,8 @@ const Mood = () => {
                           <GlossyPill
                             key={f.id}
                             label={f.name}
-                            active={factor?.id === f.id}
-                            onPress={() => setFactor(f)}
+                            active={factors.some((x) => x.id === f.id)}
+                            onPress={() => toggleFactor(f)}
                             style={styles.chip}
                             textStyle={styles.chipText}
                           />
@@ -546,13 +554,13 @@ const styles = StyleSheet.create({
   doneTitle: { fontSize: 18, fontWeight: '800', color: pastel.textDeep },
   doneSub: { fontSize: 12, color: pastel.textMuted, marginTop: 4, textAlign: 'center' },
   progressRow: { flexDirection: 'row', gap: 6, marginBottom: theme.spacing.md },
-  progressBar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.5)', overflow: 'hidden' },
+  progressBar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(236,230,255,1)', overflow: 'hidden' },
   stepTitle: { fontSize: 14, fontWeight: '700', color: pastel.textDeep },
   stepSub: { fontSize: 12, color: pastel.textMuted, marginBottom: theme.spacing.md },
   moodRow: { flexDirection: 'row', justifyContent: 'space-between' },
   moodBtn: { alignItems: 'center', gap: 6 },
   // CHANGED: active ring is now applied on top of the SoftIcon bubble itself
-  moodCircleActive: { borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)', transform: [{ scale: 1.1 }],borderRadius:20 },
+  moodCircleActive: { borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)',borderRadius: 20, transform: [{ scale: 1.1 }] },
   moodEmoji: { fontSize: 24 },
   moodLabelBox: { width: 62, height: 28, alignItems: 'center', justifyContent: 'center' },
   moodEmojiLabel: { fontSize: 11, fontWeight: '600', color: pastel.textMuted, textAlign: 'center' },
@@ -577,13 +585,13 @@ const styles = StyleSheet.create({
   calHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md },
   calTitle: { fontSize: 14, fontWeight: '700', color: pastel.textDeep },
   calGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  calWeekDay: { width: '14.28%', textAlign: 'center', fontSize: 10, fontWeight: '700', color: pastel.textMuted, paddingVertical: 4 },
+  calWeekDay: { width: '14.28%', textAlign: 'center', fontSize: 15, fontWeight: '700', color: pastel.textMuted, paddingVertical: 4 },
   calCell: { width: '14.28%', aspectRatio: 1, padding: 1 },
   calDay: {
     flex: 1, borderRadius: 6, alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)',
   },
-  calDayText: { fontSize: 11, fontWeight: '700' },
+  calDayText: { fontSize: 15, fontWeight: '700' },
   legend: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: 8, marginTop: theme.spacing.sm },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot: { width: 10, height: 10, borderRadius: 3 },

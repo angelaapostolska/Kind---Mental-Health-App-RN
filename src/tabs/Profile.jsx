@@ -1,16 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient'; // glossy gradient avatar
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import * as SecureStore from 'expo-secure-store';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '@/constants/theme';
 // CHANGED: switched from Glass.jsx's GlassCard/GlossyCircle to the same
-// SoftCard/SoftIcon primitives Home and Journal actually use. GlassCard's
-// CardShine (fixed-position blob + sparkles) is tuned for big square hero
-// cards — on Profile's compact stat tiles / settings rows it landed on top
-// of icons and text, same bug we just fixed on the Journal prompt cards.
+// SoftCard/SoftIcon primitives Home and Journal actually use.
 import { ScreenGradientBackground, pastel } from '@/components';
 import { SoftCard, SoftIcon } from '@/components/home/SoftGlass';
 import { useAppDispatch, useAppSelector } from '@/store/store';
@@ -87,21 +83,14 @@ const Profile = () => {
       <ScreenGradientBackground />
       <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: insets.top + theme.spacing.md }]} showsVerticalScrollIndicator={false}>
         <View style={styles.profileHeader}>
-          {/* Glossy gradient avatar with a soft top-left sheen — a one-off,
-              same "hero" gradient + sheen recipe SoftHeroCard uses internally,
-              just built by hand here since it needs to render initials text
-              inside a circle rather than a card. */}
-          <View style={styles.avatarShadow}>
-            <LinearGradient
-              colors={[pastel.heroPink, pastel.heroPurple, pastel.heroBlue]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.avatar}
-            >
-              <View style={styles.avatarSheen} pointerEvents="none" />
-              <Text style={styles.avatarText}>{initials}</Text>
-            </LinearGradient>
-          </View>
+          {/* CHANGED: was a hand-rolled LinearGradient + manual sheen View —
+              now SoftIcon directly, the same glossy badge component every
+              other icon in the app uses (two-tone gradient, colored shadow,
+              white border, top highlight), just larger and holding initials
+              text instead of a MaterialIcons glyph. */}
+          <SoftIcon size={80} radius={24} baseColor={pastel.heroPurple} style={styles.avatarIcon}>
+            <Text style={styles.avatarText}>{initials}</Text>
+          </SoftIcon>
           <Text style={styles.profileName}>{userName}'s Space</Text>
           <Text style={styles.profileSub}>Take care of yourself 💜</Text>
         </View>
@@ -112,12 +101,6 @@ const Profile = () => {
             { label: 'Entries', value: '8' },
             { label: 'Streak 🔥', value: '5' },
           ].map((stat, i) => (
-            // CHANGED: added `fill` — SoftCard's default fill is translucent
-            // white meant to let the page gradient bleed through it. These
-            // tiles sit close together over a fairly pale patch of the page
-            // gradient, so the translucency wasn't reading as "glass," just
-            // flat pale gray. A baked-in lavender tint (same idea as the hero
-            // cards' baked-in color) fixes it regardless of what's behind it.
             <SoftCard
               key={stat.label}
               seed={20 + i}
@@ -155,7 +138,6 @@ const Profile = () => {
 
         <Text style={styles.sectionTitle}>Settings</Text>
 
-        {/* Daily Affirmation */}
         <SoftCard seed={15} sparkleCount={3} fill={['rgba(199,168,242,0.42)', 'rgba(255,255,255,0.42)']}>
           <View style={styles.affHeaderRow}>
             <SoftIcon size={36} radius={12} tint="purple">
@@ -244,19 +226,8 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: 'transparent' },
   content: { padding: theme.spacing.md, paddingBottom: 100 },
   profileHeader: { alignItems: 'center', marginBottom: theme.spacing.lg, marginTop: theme.spacing.sm },
-  avatarShadow: {
-    borderRadius: 40, marginBottom: theme.spacing.sm,
-    shadowColor: pastel.purpleDeep, shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 8,
-  },
-  avatar: {
-    width: 80, height: 80, borderRadius: 40,
-    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)',
-  },
-  avatarSheen: {
-    position: 'absolute', top: -6, left: -6, width: 60, height: 60, borderRadius: 30,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-  },
+  // CHANGED: just spacing now — SoftIcon owns its own shadow/border/gradient
+  avatarIcon: { marginBottom: theme.spacing.sm },
   avatarText: { fontSize: 28, fontWeight: '800', color: '#fff' },
   profileName: { fontSize: theme.typography.fontSize.heading.sm, fontWeight: '800', color: pastel.textDeep },
   profileSub: { fontSize: theme.typography.fontSize.paragraph.sm, color: pastel.textMuted, marginTop: 2 },

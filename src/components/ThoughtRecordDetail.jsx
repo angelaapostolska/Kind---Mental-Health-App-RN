@@ -4,7 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { theme } from '@/constants/theme';
-import { pastel, GlossyCircle } from '@/components';
+import { pastel } from '@/components';
+import { SoftIcon } from '@/components/home/SoftGlass';
 import { showSuccessToast, showErrorToast } from '@/utils';
 import { useUpdateJournalEntryMutation, useDeleteJournalEntryMutation } from '@/api/api';
 import {
@@ -127,9 +128,13 @@ const ThoughtRecordDetail = ({ visible, entry, onClose }) => {
                         <ScrollView style={st.page} contentContainerStyle={{ paddingBottom: theme.spacing.md }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                           <View style={st.pageHead}>
                             <View style={st.pageLabelRow}>
-                              <GlossyCircle size={24} backgroundColor={pastel.purpleDeep + '33'} style={{ borderRadius: 8 }}>
-                                <MaterialCommunityIcons name={step.icon} size={13} color={pastel.purpleDeep} />
-                              </GlossyCircle>
+                              {/* CHANGED: GlossyCircle → SoftIcon, same
+                                  glossy badge treatment as the Journal prompt
+                                  cards (two-tone gradient, colored shadow,
+                                  white border, top highlight). */}
+                              <SoftIcon size={24} radius={5} baseColor={pastel.purpleDeep}>
+                                <MaterialCommunityIcons name={step.icon} size={13} color="#fff" />
+                              </SoftIcon>
                               <Text style={st.pageLabel}>STEP {step.col} · {step.title.toUpperCase()}</Text>
                             </View>
                             <TouchableOpacity

@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Keyboard, TouchableWithoutFeedback, ScrollView } from 'react-native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRegisterMutation } from '@/api/authApi';
-import { ScreenTitle, ThemeInput, ThemePasswordInput, ThemeButton } from '@/components';
+// CHANGED: same swap as Login — pastel-glass system instead of the flat
+// theme.colors.surface.two + ThemeButton look.
+import { ScreenTitle, ThemeInput, ThemePasswordInput, ScreenGradientBackground, GradientButton, pastel } from '@/components';
+import { SoftCard, SoftIcon } from '@/components/home/SoftGlass';
 import NavigationScreens from '@/config/NavigationScreens';
 import { theme } from '@/constants/theme';
 import { setSignedIn } from '@/store/commonSlices/userSlice';
@@ -63,15 +68,39 @@ const Signup = ({ navigation }) => {
 
   return (
     <View style={styles.safeArea}>
+      <ScreenGradientBackground />
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
           <View style={styles.container}>
             <View style={styles.headerContent}>
+              {/* CHANGED: added a SoftIcon logo badge, matching Login's — the
+                  two auth screens now read as a matching pair. */}
+              <SoftIcon size={88} radius={26} baseColor={pastel.heroPink} style={styles.logoIcon}>
+                <MaterialCommunityIcons name="account-plus" size={38} color="#fff" />
+                {/* white accent circle, top-left, diagonal fade to transparent —
+                    same recipe as Login's icon / the active tab pill */}
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.9)', 'rgba(255,255,255,0)']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0.3, y: 0.3 }}
+                  style={styles.logoAccentTopLeft}
+                  pointerEvents="none"
+                />
+                {/* mirrored accent circle, bottom-right */}
+                <LinearGradient
+                  colors={['rgba(255,255,255,0.8)', 'rgba(255,255,255,0)']}
+                  start={{ x: 1, y: 1 }}
+                  end={{ x: 0.6, y: 0.6 }}
+                  style={styles.logoAccentBottomRight}
+                  pointerEvents="none"
+                />
+              </SoftIcon>
               <ScreenTitle title="Create Account" containerStyle={styles.title} />
               <Text style={styles.subtitle}>Start your wellness journey today</Text>
             </View>
 
-            <View style={styles.formContainer}>
+            {/* Form — same frosted glass card every other screen uses */}
+            <SoftCard seed={45} sparkleCount={3} style={styles.formCard}>
               <View style={styles.inputContainer}>
                 <ThemeInput
                   placeholder="Full Name"
@@ -104,7 +133,10 @@ const Signup = ({ navigation }) => {
                           <MaterialIcons
                             name={r.passed ? 'check-circle' : 'radio-button-unchecked'}
                             size={14}
-                            color={r.passed ? '#27ae60' : theme.colors.text.secondary}
+                            // CHANGED: '#27ae60' → pastel.mintDeep, ties the
+                            // success color back into the app's own palette
+                            // instead of a generic green.
+                            color={r.passed ? pastel.mintDeep : pastel.textMuted}
                           />
                           <Text style={[styles.ruleText, r.passed && styles.ruleTextPassed]}>
                             {r.label}
@@ -116,7 +148,7 @@ const Signup = ({ navigation }) => {
                 </View>
               </View>
 
-              <ThemeButton title="Sign Up" onPress={handleSignupPress} loading={isLoading} />
+              <GradientButton label="Sign Up" onPress={handleSignupPress} loading={isLoading} />
 
               <TouchableOpacity
                 onPress={() => navigation.navigate(NavigationScreens.Login)}
@@ -126,7 +158,7 @@ const Signup = ({ navigation }) => {
                   Already have an account? <Text style={styles.loginLink}>Log In</Text>
                 </Text>
               </TouchableOpacity>
-            </View>
+            </SoftCard>
           </View>
         </ScrollView>
       </TouchableWithoutFeedback>
@@ -135,33 +167,53 @@ const Signup = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: theme.colors.surface.two,
-  },
+  // CHANGED: transparent instead of theme.colors.surface.two — ScreenGradientBackground shows through
+  safeArea: { flex: 1, backgroundColor: 'transparent' },
   scrollContent: {
     flexGrow: 1,
   },
   container: {
     flex: 1,
-    paddingTop: theme.spacing.xxxl,
+    justifyContent: 'center',
     paddingBottom: theme.spacing.xxxl,
   },
   headerContent: {
     alignItems: 'center',
-    marginTop: theme.spacing.xl,
+    marginTop: 0,
     paddingHorizontal: theme.spacing.md,
+  },
+  logoIcon: {
+    marginBottom: theme.spacing.md,
+  },
+  // NEW: same two accent circles as Login's icon, scaled down to match this
+  // icon's smaller size (88 vs Login's 100).
+  logoAccentTopLeft: {
+    position: 'absolute',
+    top: 2,
+    left: 2,
+    width: 48,
+    height: 48,
+    borderRadius: 22,
+  },
+  logoAccentBottomRight: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 66,
+    height: 66,
+    borderRadius: 22,
   },
   title: {
     marginTop: theme.spacing.md,
   },
+  // CHANGED: theme.colors.text.secondary → pastel.textMuted
   subtitle: {
     marginTop: theme.spacing.xs,
-    color: theme.colors.text.secondary,
+    color: pastel.textMuted,
     fontSize: theme.typography.fontSize.paragraph.md,
     textAlign: 'center',
   },
-  formContainer: {
+  formCard: {
     marginTop: theme.spacing.xxxl,
     marginHorizontal: theme.spacing.md,
   },
@@ -174,10 +226,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.xs,
     gap: 4,
   },
+  // CHANGED: theme.colors.text.secondary → pastel.textMuted
   rulesTitle: {
     fontSize: theme.typography.fontSize.label.xs,
     fontWeight: theme.typography.fontVariants.secondary.semibold,
-    color: theme.colors.text.secondary,
+    color: pastel.textMuted,
     marginBottom: 2,
   },
   ruleRow: {
@@ -185,24 +238,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
+  // CHANGED: theme.colors.text.secondary → pastel.textMuted
   ruleText: {
     fontSize: theme.typography.fontSize.label.xs,
-    color: theme.colors.text.secondary,
+    color: pastel.textMuted,
   },
+  // CHANGED: '#27ae60' → pastel.mintDeep
   ruleTextPassed: {
-    color: '#27ae60',
+    color: pastel.mintDeep,
     fontWeight: theme.typography.fontVariants.secondary.semibold,
   },
   loginContainer: {
     marginTop: theme.spacing.md,
     alignItems: 'center',
   },
+  // CHANGED: theme.colors.text.secondary → pastel.textMuted
   loginText: {
-    color: theme.colors.text.secondary,
+    color: pastel.textMuted,
     fontSize: theme.typography.fontSize.paragraph.md,
   },
+  // CHANGED: theme.colors.text.action → pastel.purpleDeep
   loginLink: {
-    color: theme.colors.text.action,
+    color: pastel.purpleDeep,
     fontWeight: theme.typography.fontVariants.secondary.semibold,
   },
 });

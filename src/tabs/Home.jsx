@@ -131,7 +131,7 @@ const Home = () => {
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>{greeting}</Text>
-            <Text style={styles.userName}>Hi, {userName}</Text>
+            <Text style={styles.userName}>{userName}</Text>
           </View>
         </View>
 

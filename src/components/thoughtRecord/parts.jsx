@@ -4,7 +4,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { theme } from '@/constants/theme';
-import { pastel, GlossyCircle } from '@/components';
+import { pastel } from '@/components';
+import { SoftIcon } from '@/components/home/SoftGlass';
 import { FEELINGS } from '@/utils';
 
 /* Shared building blocks for the CBT Thought Record — used by the create flow
@@ -254,9 +255,13 @@ export const StepPrompt = ({ step }) => {
   return (
     <View style={s.promptWrap}>
       <View style={s.promptLabelRow}>
-        <GlossyCircle size={26} backgroundColor={accent + '33'} style={{ borderRadius: 9 }}>
-          <MaterialCommunityIcons name={step.icon} size={15} color={accent} />
-        </GlossyCircle>
+        {/* CHANGED: GlossyCircle → SoftIcon — the same fuller glossy badge
+            (two-tone gradient, colored shadow, white border, top highlight)
+            the Journal prompt cards use, tinted with this step's own accent
+            color instead of a flat translucent fill. */}
+        <SoftIcon size={26} radius={8} baseColor={accent}>
+          <MaterialCommunityIcons name={step.icon} size={15} color="#fff" />
+        </SoftIcon>
         <Text style={[s.promptLabel, { color: accent }]}>STEP {step.col} · {step.title.toUpperCase()}</Text>
       </View>
       <Text style={s.promptText}>{step.prompt}</Text>
