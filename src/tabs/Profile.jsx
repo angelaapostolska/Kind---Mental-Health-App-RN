@@ -16,6 +16,12 @@ import {
   applyAffirmationSettings,
   DEFAULT_SETTINGS,
 } from '@/utils/notifications';
+import { countActiveDays, computeStreak, getCurrentWeek, isoDate } from '@/utils';
+import {
+  useGetMoodEntriesQuery,
+  useGetJournalEntriesQuery,
+  useGetBreathingSessionsQuery,
+} from '@/api/api';
 
 // 24h -> "9:00 AM"
 const formatTime = (h, m) => {
@@ -41,6 +47,28 @@ const Profile = () => {
   const appState = useAppSelector((s) => s.appState);
   const userName = appState?.userName || 'Friend';
   const initials = userName.slice(0, 2).toUpperCase();
+  const userId = useAppSelector((s) => s.userState.userId);
+
+  // ── Stats (real data) ──────────────────────────────────────────────────────
+  const { data: moodEntries = [] } = useGetMoodEntriesQuery(userId, { skip: !userId });
+  const { data: journalEntries = [] } = useGetJournalEntriesQuery(userId, { skip: !userId });
+  // NOTE: no backend route for this yet — see api.js `getBreathingSessions`.
+  const { data: breathingSessions = [] } = useGetBreathingSessionsQuery(userId, { skip: !userId });
+
+  const moodDates = moodEntries.map((e) => e.date);
+  const journalDates = journalEntries.map((e) => e.createdAt);
+
+  // "Active" = logged a mood or wrote a journal entry that day. There's no
+  // habit-completion history from the backend (only "is today done"), so the
+  // streak is computed from this activity instead of habit logs.
+  const daysActive = countActiveDays([...moodDates, ...journalDates]);
+  const totalEntries = moodEntries.length + journalEntries.length;
+  const streak = computeStreak([...moodDates, ...journalDates]);
+
+  const weekDates = new Set(getCurrentWeek().map((d) => isoDate(d.date)));
+  const moodsThisWeek = moodEntries.filter((e) => weekDates.has(e.date)).length;
+  const journalsThisWeek = journalEntries.filter((e) => weekDates.has(e.createdAt)).length;
+  const breatheThisWeek = breathingSessions.filter((s) => weekDates.has(s.date)).length;
 
   const [aff, setAff] = useState(DEFAULT_SETTINGS);
   useEffect(() => {
@@ -97,9 +125,9 @@ const Profile = () => {
 
         <View style={styles.statsRow}>
           {[
-            { label: 'Days Active', value: '12' },
-            { label: 'Entries', value: '8' },
-            { label: 'Streak 🔥', value: '5' },
+            { label: 'Days Active', value: String(daysActive) },
+            { label: 'Entries', value: String(totalEntries) },
+            { label: 'Streak 🔥', value: String(streak) },
           ].map((stat, i) => (
             <SoftCard
               key={stat.label}
@@ -121,9 +149,9 @@ const Profile = () => {
           <Text style={styles.sectionTitle}>This Week</Text>
           <View style={styles.weekStats}>
             {[
-              { icon: 'emoticon-happy-outline', label: 'Moods logged', val: 5 },
-              { icon: 'book-open-variant', label: 'Journal entries', val: 2 },
-              { icon: 'weather-windy', label: 'Breathe sessions', val: 3 },
+              { icon: 'emoticon-happy-outline', label: 'Moods logged', val: moodsThisWeek },
+              { icon: 'book-open-variant', label: 'Journal entries', val: journalsThisWeek },
+              { icon: 'weather-windy', label: 'Breathe sessions', val: breatheThisWeek },
             ].map((s) => (
               <View key={s.label} style={styles.weekStatRow}>
                 <SoftIcon size={32} radius={10} tint="lavender">

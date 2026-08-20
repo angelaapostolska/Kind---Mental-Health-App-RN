@@ -40,7 +40,7 @@ const baseQueryWithBearer = async (args, api, extraOptions) => {
 export const cdtApi = createApi({
   reducerPath: 'cdtApi',
   baseQuery: baseQueryWithBearer,
-  tagTypes: ['User', 'MoodEntry', 'JournalEntry', 'JournalPrompt', 'Emotion', 'MoodFactor', 'Habit', 'HabitLog', 'Insight'],
+  tagTypes: ['User', 'MoodEntry', 'JournalEntry', 'JournalPrompt', 'Emotion', 'MoodFactor', 'Habit', 'HabitLog', 'Insight', 'BreathingSession'],
   endpoints: (builder) => ({
     // --- User ---
     getUserByEmail: builder.query({
@@ -193,6 +193,22 @@ export const cdtApi = createApi({
         { type: 'HabitLog', id: habitId },
       ],
     }),
+
+    // --- Breathing Sessions ---
+    // NOTE: this backend route does not exist yet — see api README / ask
+    // backend to add it. Frontend is wired against the shape documented there.
+    getBreathingSessions: builder.query({
+      query: (userId) => `api/breathing-sessions/user/${userId}`,
+      providesTags: ['BreathingSession'],
+    }),
+    createBreathingSession: builder.mutation({
+      query: (data) => ({
+        url: 'api/breathing-sessions',
+        method: 'POST',
+        body: data,
+      }),
+      invalidatesTags: ['BreathingSession'],
+    }),
   }),
 });
 
@@ -218,4 +234,6 @@ export const {
   useGetHabitTodayQuery,
   useToggleHabitTodayMutation,
   useGetJournalPromptsByTypeQuery,
+  useGetBreathingSessionsQuery,
+  useCreateBreathingSessionMutation,
 } = cdtApi;

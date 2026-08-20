@@ -84,6 +84,27 @@ export const AFFIRMATIONS = [
 export const getRandomAffirmation = () =>
   AFFIRMATIONS[Math.floor(Math.random() * AFFIRMATIONS.length)];
 
+// Number of distinct calendar days present in a list of 'YYYY-MM-DD' strings.
+export const countActiveDays = (dates) => new Set(dates).size;
+
+// Current streak of consecutive active days, counting backward from today.
+// `dates` is a list of 'YYYY-MM-DD' strings (e.g. mood/journal entry dates).
+// If today has no entry yet, we start counting from yesterday instead, so
+// logging later today doesn't make an otherwise-alive streak read as broken.
+export const computeStreak = (dates) => {
+  const set = new Set(dates);
+  const cursor = new Date();
+  if (!set.has(isoDate(cursor))) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  let streak = 0;
+  while (set.has(isoDate(cursor))) {
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
+};
+
 export const getGreeting = () => {
   const hour = new Date().getHours();
   if (hour < 12) return 'Good Morning';

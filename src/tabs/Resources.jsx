@@ -9,6 +9,9 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { theme } from '@/constants/theme';
 import { ScreenGradientBackground, GradientButton, pastel } from '@/components';
 import { SoftCard, SoftHeroCard, SoftIcon } from '@/components/home/SoftGlass';
+import { useAppSelector } from '@/store/store';
+import { useCreateBreathingSessionMutation } from '@/api/api';
+import { isoDate } from '@/utils';
 
 // CHANGED: same fix philosophy as SoftCard/Journal's prompt cards — a
 // translucent low-alpha tint (exercise.petalA + '26') can read as washed-out
@@ -360,12 +363,28 @@ const TipRow = ({ icon, text, idx }) => (
 
 const Resources = () => {
   const insets = useSafeAreaInsets();
+  const userId = useAppSelector((s) => s.userState.userId);
+  // NOTE: no backend route for this yet — see api.js `createBreathingSession`.
+  const [createBreathingSession] = useCreateBreathingSessionMutation();
 
   const [exercise,  setExercise]  = useState(EXERCISES[0]);
   const [phaseIdx,  setPhaseIdx]  = useState(0);
   const [countdown, setCountdown] = useState(0);
   const [running,   setRunning]   = useState(false);
   const [cycles,    setCycles]    = useState(0);
+
+  // Logs a completed session once the user stops, so Profile's "Breathe
+  // sessions" stat has something real to count. Best-effort — a failed log
+  // shouldn't interrupt the breathing flow.
+  const logSession = useCallback(() => {
+    if (!userId || cycles < 1) return;
+    createBreathingSession({
+      date: isoDate(new Date()),
+      exerciseType: exercise.id,
+      cycles,
+      user: { id: userId },
+    }).catch(() => {});
+  }, [userId, cycles, exercise.id, createBreathingSession]);
 
   const phaseSeq = buildPhaseSeq(exercise);
   const phaseKey = phaseSeq[phaseIdx];
@@ -418,6 +437,7 @@ const Resources = () => {
 
   const toggle = () => {
     if (running) {
+      logSession();
       setRunning(false); setPhaseIdx(0); setCycles(0);
     } else {
       setPhaseIdx(0); setCycles(0); setRunning(true);
@@ -425,6 +445,7 @@ const Resources = () => {
   };
 
   const selectExercise = (ex) => {
+    if (running) logSession();
     setRunning(false);
     setPhaseIdx(0);
     setCycles(0);
