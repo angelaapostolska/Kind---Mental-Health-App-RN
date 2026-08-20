@@ -11,7 +11,7 @@ import { SoftCard, SoftIcon } from '@/components/home/SoftGlass';
 import NavigationScreens from '@/config/NavigationScreens';
 import { theme } from '@/constants/theme';
 import { setSignedIn } from '@/store/commonSlices/userSlice';
-import { useAppDispatch } from '@/store/store';
+import { useAppDispatch, useAppSelector } from '@/store/store';
 import { showErrorToast } from '@/utils';
 
 const PASSWORD_RULES = [
@@ -24,7 +24,11 @@ const PASSWORD_RULES = [
 const Signup = ({ navigation }) => {
   const dispatch = useAppDispatch();
   const [register, { isLoading }] = useRegisterMutation();
-  const [name, setName] = useState('');
+  // Onboarding already collected these — carry them into the account instead
+  // of asking again / letting them go to waste once the user signs up.
+  const onboardingName = useAppSelector((state) => state.appState?.userName);
+  const selectedAnimal = useAppSelector((state) => state.appState?.selectedAnimal);
+  const [name, setName] = useState(onboardingName || '');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [emailError, setEmailError] = useState('');
@@ -54,7 +58,7 @@ const Signup = ({ navigation }) => {
       return;
     }
     try {
-      await register({ name, email, password }).unwrap();
+      await register({ name, email, password, animal: selectedAnimal }).unwrap();
       dispatch(setSignedIn(true));
     } catch (err) {
       if (err?.status === 409) {

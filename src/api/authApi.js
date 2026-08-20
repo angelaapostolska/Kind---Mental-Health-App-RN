@@ -1,7 +1,7 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
 import * as SecureStore from 'expo-secure-store';
 import { env } from '@/config/environments';
-import { setUserName } from '@/store/commonSlices/appSlice';
+import { setUserName, setSelectedAnimal } from '@/store/commonSlices/appSlice';
 import { setUserId, setUserEmail } from '@/store/commonSlices/userSlice';
 
 export const authApi = createApi({
@@ -27,16 +27,19 @@ export const authApi = createApi({
           dispatch(setUserName(data.name));
           dispatch(setUserEmail(data.email));
           dispatch(setUserId(data.id));
+          // Restores the onboarding companion choice on whatever device/reinstall
+          // the user logs in from, instead of leaving it at the local default.
+          if (data.animal) dispatch(setSelectedAnimal(data.animal));
         } catch (err) {
           console.warn('Login failed', err);
         }
       },
     }),
     register: builder.mutation({
-      query: ({ name, email, password }) => ({
+      query: ({ name, email, password, animal }) => ({
         url: 'api/register',
         method: 'POST',
-        body: { name, email, password },
+        body: { name, email, password, animal },
       }),
       async onQueryStarted(arg, { dispatch, queryFulfilled }) {
         try {
@@ -45,6 +48,7 @@ export const authApi = createApi({
           dispatch(setUserName(data.name));
           dispatch(setUserEmail(data.email));
           dispatch(setUserId(data.id));
+          if (data.animal) dispatch(setSelectedAnimal(data.animal));
         } catch (err) {
           console.warn('Register failed', err);
         }
