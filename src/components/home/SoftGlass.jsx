@@ -86,7 +86,27 @@ const Sparkles = ({ seed = 1, count = 4, dim }) => {
 };
 
 // ── Frosted card ────────────────────────────────────────────────────────────────
-export const SoftCard = ({ children, style, radius = 24, fill, noPad, seed = 1, sparkleCount = 4, ...rest }) => (
+// `noShadow`: skip the shadow/elevation (but keep the same rounded, opaque
+// base). Needed for a SoftCard placed inside a clipping parent — e.g.
+// react-native-gesture-handler's Swipeable, whose row container is
+// `overflow: 'hidden'` by design (it has to hide the off-screen swipe
+// actions). That parent-level clip cuts off this card's shadow — which
+// paints outside the card's own rounded bounds — at the parent's plain
+// rectangular edge, turning a soft rounded shadow into a hard-edged square.
+// The fix is to cast the shadow from a wrapper *outside* the clipping
+// parent instead and pass `noShadow` here so it isn't drawn (and clipped)
+// twice. See MoodEntryRow in tabs/Mood.jsx for the paired wrapper.
+export const SoftCard = ({
+  children,
+  style,
+  radius = 24,
+  fill,
+  noPad,
+  noShadow,
+  seed = 1,
+  sparkleCount = 4,
+  ...rest
+}) => (
   // CHANGED: outer background was a hardcoded translucent white regardless of
   // the `fill` prop — unlike SoftHeroCard, which always derives its outer
   // background from its own `colors`. Since the inner fill is translucent,
@@ -96,7 +116,7 @@ export const SoftCard = ({ children, style, radius = 24, fill, noPad, seed = 1, 
   // the brand tint, same idea as SoftHeroCard using colors[1]) means there's
   // no mismatched base color left to show through, regardless of what `fill`
   // a given card passes in.
-  <View style={[s.shadow, { borderRadius: radius, backgroundColor: '#F0E8FC' }, style]} {...rest}>
+  <View style={[noShadow ? null : s.shadow, { borderRadius: radius, backgroundColor: '#F0E8FC' }, style]} {...rest}>
     <View style={[s.clip, { borderRadius: radius }]}>
       {/* CHANGED: default fill was near-white (rgba(255,255,255,0.58/0.40)),
           which is why every SoftCard without a custom `fill` prop read as a

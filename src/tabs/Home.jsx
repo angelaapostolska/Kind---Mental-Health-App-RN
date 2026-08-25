@@ -22,6 +22,7 @@ import {
   useDeleteHabitMutation,
 } from '@/api/api';
 
+import CompanionAvatar from '@/components/home/CompanionAvatar';
 import MoodSlider from '@/components/home/MoodSlider';
 import HabitRow, { HabitStatus } from '@/components/home/HabitRow';
 import HabitModal from '@/components/home/HabitModal';
@@ -33,6 +34,7 @@ const Home = () => {
   const insets   = useSafeAreaInsets();
   const appState = useAppSelector((s) => s.appState);
   const userName = appState?.userName || 'Friend';
+  const selectedAnimal = appState?.selectedAnimal || 'cat';
   const userId   = useAppSelector((s) => s.userState.userId);
 
   // ── Mood ────────────────────────────────────────────────────────────────────
@@ -133,6 +135,7 @@ const Home = () => {
             <Text style={styles.greeting}>{greeting}</Text>
             <Text style={styles.userName}>{userName}</Text>
           </View>
+          <CompanionAvatar animalId={selectedAnimal} />
         </View>
 
         {/* Affirmation — CHANGED: distinct sparkle seed/count per card */}
@@ -251,7 +254,7 @@ const Home = () => {
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: 'transparent' },
   content: { padding: theme.spacing.md, paddingBottom: 100 },
-  header: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, marginBottom: theme.spacing.lg, paddingHorizontal: 8},
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: theme.spacing.sm, marginBottom: theme.spacing.lg, paddingHorizontal: 8},
   greeting: { fontSize: theme.typography.fontSize.paragraph.sm, color: pastel.textMuted, fontWeight: '600' },
   userName: { fontSize: theme.typography.fontSize.heading.md, fontWeight: '800', color: pastel.textDeep },
   affirmationHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: theme.spacing.xs, opacity: 0.9 },

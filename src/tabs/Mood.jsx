@@ -164,25 +164,33 @@ const MoodEntryRow = ({ entry, onRequestDelete }) => {
   const factors = entry.selectedFactors ? [...entry.selectedFactors] : [];
   const seed = Number(entry.id) || 1;
 
+  // CHANGED: Swipeable's row container is `overflow: 'hidden'` (it has to
+  // hide the off-screen delete action until swiped), which was clipping the
+  // SoftCard's shadow at that plain rectangular edge — turning the intended
+  // soft rounded shadow into a hard-edged square behind the card. Casting
+  // the shadow from this outer, unclipped wrapper instead (and telling the
+  // inner SoftCard to skip its own via `noShadow`) keeps the shadow rounded.
   return (
-    <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
-      <SoftCard noPad seed={seed} sparkleCount={2} style={styles.entryCard}>
-        <View style={styles.entryRow}>
-          <SoftIcon size={42} radius={13} baseColor={moodColor(level)}>
-            <Text style={styles.entryEmoji}>{moodEmoji(level)}</Text>
-          </SoftIcon>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.entryMoodLabel}>{moodLabel(level)}</Text>
-            {(emotions.length > 0 || factors.length > 0) && (
-              <Text style={styles.entryMeta} numberOfLines={1}>
-                {[...emotions.map((e) => e.name), ...factors.map((f) => f.name)].join(' · ')}
-              </Text>
-            )}
-            {!!entry.note && <Text style={styles.entryNote}>{entry.note}</Text>}
+    <View style={styles.entryCardShadow}>
+      <Swipeable ref={swipeRef} renderRightActions={renderRightActions} overshootRight={false}>
+        <SoftCard noPad noShadow seed={seed} sparkleCount={2}>
+          <View style={styles.entryRow}>
+            <SoftIcon size={42} radius={13} baseColor={moodColor(level)}>
+              <Text style={styles.entryEmoji}>{moodEmoji(level)}</Text>
+            </SoftIcon>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.entryMoodLabel}>{moodLabel(level)}</Text>
+              {(emotions.length > 0 || factors.length > 0) && (
+                <Text style={styles.entryMeta} numberOfLines={1}>
+                  {[...emotions.map((e) => e.name), ...factors.map((f) => f.name)].join(' · ')}
+                </Text>
+              )}
+              {!!entry.note && <Text style={styles.entryNote}>{entry.note}</Text>}
+            </View>
           </View>
-        </View>
-      </SoftCard>
-    </Swipeable>
+        </SoftCard>
+      </Swipeable>
+    </View>
   );
 };
 
@@ -601,7 +609,19 @@ const styles = StyleSheet.create({
   emptyEntriesText: { fontSize: 12, color: pastel.textMuted, fontWeight: '600' },
   daySection: { marginBottom: theme.spacing.md },
   dayLabel: { fontSize: 11, fontWeight: '700', color: pastel.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
-  entryCard: { marginBottom: 8 },
+  // Shadow lives here (outside the Swipeable) instead of on the SoftCard —
+  // see the CHANGED note above MoodEntryRow. Border radius + background
+  // match SoftCard's own defaults so nothing shows through at the corners.
+  entryCardShadow: {
+    borderRadius: 24,
+    backgroundColor: '#F0E8FC',
+    shadowColor: pastel.purpleDeep,
+    shadowOpacity: 0.3,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 14 },
+    elevation: 9,
+    marginBottom: 8,
+  },
   entryRow: { flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, padding: 16 },
   entryEmoji: { fontSize: 20 },
   entryMoodLabel: { fontSize: 13, fontWeight: '700', color: pastel.textDeep },

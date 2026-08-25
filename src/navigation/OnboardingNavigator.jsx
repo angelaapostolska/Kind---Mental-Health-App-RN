@@ -2,15 +2,15 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import { ANIMALS } from '@/constants/animals';
 import { theme } from '@/constants/theme';
+import {
+  setHideOnboarding,
+  setUserName,
+  setSelectedAnimal,
+  setOnboardingJustCompleted,
+} from '@/store/commonSlices/appSlice';
 import { useAppDispatch } from '@/store/store';
-import { setHideOnboarding, setUserName, setSelectedAnimal } from '@/store/commonSlices/appSlice';
-
-const ANIMALS = [
-  { id: 'cat', name: 'Mochi', emoji: '🐱', desc: 'Calm & curious' },
-  { id: 'dog', name: 'Buddy', emoji: '🐶', desc: 'Loyal & cheerful' },
-  { id: 'bunny', name: 'Luna', emoji: '🐰', desc: 'Gentle & kind' },
-];
 
 const FEATURES = [
   { icon: 'star-four-points', label: 'Track your mood daily' },
@@ -31,6 +31,7 @@ const OnboardingNavigator = () => {
     const trimmedName = name.trim() || 'Friend';
     dispatch(setUserName(trimmedName));
     dispatch(setSelectedAnimal(selectedAnimal));
+    dispatch(setOnboardingJustCompleted(true));
     dispatch(setHideOnboarding(true));
   };
 
@@ -111,7 +112,9 @@ const OnboardingNavigator = () => {
 
           <TouchableOpacity
             style={[styles.nextBtn, !name.trim() && { opacity: 0.5 }]}
-            onPress={() => { if (name.trim()) complete(); }}
+            onPress={() => {
+              if (name.trim()) complete();
+            }}
             disabled={!name.trim()}
           >
             <Text style={styles.nextBtnText}>Let's Begin</Text>
