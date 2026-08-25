@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, PanResponder } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
@@ -81,28 +81,51 @@ export const parseStructured = (entry) => {
 };
 
 // Dependency-free slider on the RN responder system, with a gradient fill + white thumb.
+// Dependency-free slider using PanResponder for smooth dragging without jumping.
 export const Slider = ({ value, min, max, step = 1, onChange, fill, gradient }) => {
   const widthRef = useRef(1);
-  const handle = (e) => {
-    const x = e.nativeEvent.locationX;
+  const trackRef = useRef(null);
+
+  const updateValueFromX = (x) => {
     const ratio = clamp(x / widthRef.current, 0, 1);
     const snapped = clamp(Math.round((min + ratio * (max - min)) / step) * step, min, max);
-    if (snapped !== value) onChange(snapped);
+    if (snapped !== value) {
+      onChange(snapped);
+    }
   };
+
+  const panResponder = useMemo(() => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (e) => {
+      // Use locationX if available, or fallback to pageX measurement
+      updateValueFromX(e.nativeEvent.locationX);
+    },
+    onPanResponderMove: (e, gestureState) => {
+      // Using gestureState.dx combined with initial touch or measure is even safer,
+      // but tracking location relative to track layout via pageX is extremely robust:
+      if (trackRef.current) {
+        trackRef.current.measure((fx, fy, width, height, px, py) => {
+          const relativeX = e.nativeEvent.pageX - px;
+          updateValueFromX(relativeX);
+        });
+      }
+    },
+  }), [min, max, step, value, onChange]);
+
   const pct = ((value - min) / (max - min)) * 100;
   const grad = gradient || [fill, fill];
+
   return (
     <View
+      ref={trackRef}
       style={s.sliderTrack}
       onLayout={(e) => { widthRef.current = e.nativeEvent.layout.width || 1; }}
-      onStartShouldSetResponder={() => true}
-      onMoveShouldSetResponder={() => true}
-      onResponderGrant={handle}
-      onResponderMove={handle}
+      {...panResponder.panHandlers}
     >
       <View style={s.sliderRail} />
       <LinearGradient colors={grad} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[s.sliderFill, { width: `${pct}%` }]} />
-      <View style={[s.sliderThumb, { left: `${pct}%`, borderColor: fill }]} />
+      <View style={[s.sliderThumb, { left: `${pct}%`, borderColor: fill }]} pointerEvents="none" />
     </View>
   );
 };

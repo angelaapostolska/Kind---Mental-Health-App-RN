@@ -4,7 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { theme } from '@/constants/theme';
 import { pastel } from '@/components';
-import { isoDate, showSuccessToast, showErrorToast } from '@/utils';
+import { isoDate, showSuccessToast } from '@/utils';
 import { useCreateJournalEntryMutation } from '@/api/api';
 import {
   STEPS, emptyAnswers, buildContent, buildStructured, StepInput, StepPrompt, StepCircles,
@@ -14,10 +14,22 @@ import BeforeAfterReveal from '@/components/thoughtRecord/BeforeAfterReveal';
 const ThoughtRecord = ({ visible, onClose, userId, antPromptId, onSaved }) => {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState(emptyAnswers());
+  const [toastMessage, setToastMessage] = useState(null);
+
+  const showModalToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500); // auto-hide after 3.5s
+  };
+
   const patch = (obj) => setAnswers((a) => ({ ...a, ...obj }));
 
   const [createJournalEntry, { isLoading: saving }] = useCreateJournalEntryMutation();
-  const close = () => { setStep(0); setAnswers(emptyAnswers()); onClose(); };
+  const close = () => {
+    setStep(0);
+    setAnswers(emptyAnswers());
+    setToastMessage(null);
+    onClose();
+  };
 
   const isFinale = step === STEPS.length;
   const current = STEPS[step];
@@ -25,7 +37,7 @@ const ThoughtRecord = ({ visible, onClose, userId, antPromptId, onSaved }) => {
 
   const save = async () => {
     if (!canSave || !userId) {
-      showErrorToast('Please fill in the situation, the thought, and a balanced thought.');
+      showModalToast('Please fill in the situation, the thought, and a balanced thought.');
       return;
     }
     try {
@@ -44,13 +56,21 @@ const ThoughtRecord = ({ visible, onClose, userId, antPromptId, onSaved }) => {
       close();
       onSaved?.();
     } catch {
-      showErrorToast('Could not save your thought record. Please try again.');
+      showModalToast('Could not save your thought record. Please try again.');
     }
   };
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
       <View style={st.overlay}>
+        {/* Floating Toast rendered at the very top of the overlay wrapper */}
+        {toastMessage && (
+          <View style={st.floatingToast}>
+            <MaterialIcons name="error-outline" size={18} color="#fff" />
+            <Text style={st.floatingToastText}>{toastMessage}</Text>
+          </View>
+        )}
+
         <View style={st.sheet}>
           {isFinale ? (
             <BeforeAfterReveal answers={answers} onBack={() => setStep(STEPS.length - 1)} onSave={save} saving={saving} />
@@ -106,6 +126,28 @@ const st = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.sm },
   kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 1, color: pastel.purpleDeep },
   closeBtn: { width: 34, height: 34, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.55)', borderWidth: 1, borderColor: pastel.glassBorder, alignItems: 'center', justifyContent: 'center' },
+
+  // Absolute floating toast at the very top of the modal overlay layer
+  floatingToast: {
+    position: 'absolute',
+    top: 50, // adjust higher or lower depending on your safe area / notch spacing
+    left: theme.spacing.lg,
+    right: theme.spacing.lg,
+    zIndex: 9999,
+    elevation: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: pastel.coral || '#E57373',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  floatingToastText: { color: '#fff', fontSize: 13, fontWeight: '700', flex: 1 },
+
   footer: { flexDirection: 'row', gap: theme.spacing.xs, marginTop: theme.spacing.sm },
   backBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: pastel.glassBorder, borderRadius: 16, paddingVertical: 15, paddingHorizontal: 18 },
   backText: { fontWeight: '700', color: pastel.textDeep, fontSize: 13 },

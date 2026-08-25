@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   message: {
     fontWeight: theme.typography.fontVariants.secondary.regular,
-    fontSize: theme.typography.fontSize.paragraph.sm,
+    fontSize: theme.typography.fontSize.paragraph.lg,
   },
   successText: {
     color: theme.colors.text.action,
