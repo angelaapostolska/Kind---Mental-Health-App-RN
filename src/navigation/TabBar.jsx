@@ -20,7 +20,10 @@ const ICONS = {
   Home: { outline: 'home-variant-outline', filled: 'home-variant' },
   Mood: { outline: 'emoticon-happy-outline', filled: 'emoticon-happy' },
   Journal: { outline: 'book-open-page-variant-outline', filled: 'book-open-page-variant' },
-  Resources: { outline: 'weather-windy', filled: 'meditation' },
+  // CHANGED: was 'meditation' (a seated-person icon) when active — swapped
+  // the air-waves icon it shows the rest of the time, so selecting the tab
+  // no longer changes what icon it is.
+  Resources: { outline: 'weather-windy', filled: 'weather-windy' },
   Profile: { outline: 'account-circle-outline', filled: 'account-circle' },
 };
 
