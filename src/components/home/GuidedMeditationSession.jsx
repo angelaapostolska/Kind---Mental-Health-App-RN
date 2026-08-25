@@ -4,13 +4,17 @@ import {
 } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Audio } from 'expo-av';
+import Constants from 'expo-constants';
 
 // ─── Azure Speech config ──────────────────────────────────────────────────────
 // Create a free Speech resource: Azure portal → "Speech service" → free F0 tier.
-// Free tier: 500,000 characters / month. Paste your key + region below.
-//TODO uncomment before use
-// const AZURE_KEY    = 'key_from_discord';
-// const AZURE_REGION = 'region_from_discord';
+// Free tier: 500,000 characters / month.
+// CHANGED: was a hardcoded key/region pasted straight into this file (had to
+// stay commented out so it never got pushed). Now read from app config —
+// see app.config.js, which pulls AZURE_SPEECH_KEY / AZURE_SPEECH_REGION out
+// of .env (gitignored, never committed; add yours per .env.example).
+const AZURE_KEY    = Constants.expoConfig?.extra?.azureSpeechKey;
+const AZURE_REGION = Constants.expoConfig?.extra?.azureSpeechRegion;
 const VOICE        = 'en-US-CoraMultilingualNeural';
 
 // Pacing for a calm, meditative delivery.
